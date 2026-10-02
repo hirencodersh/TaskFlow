@@ -1,3 +1,4 @@
+```prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -62,8 +63,8 @@ model Project {
   name        String
   description String?
   status      ProjectStatus
-  startDate   DateTime
-  dueDate     DateTime
+  startDate   DateTime?
+  dueDate     DateTime?
   ownerId     String
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -218,3 +219,4 @@ model RefreshToken {
   @@index([userId])
   @@index([expiresAt])
 }
+```
