@@ -2,12 +2,32 @@ import {
   Navigate,
   Route,
   Routes,
+  useParams,
 } from 'react-router-dom';
 
 import LoginPage from '../modules/auth/LoginPage';
+import DashboardPage from '../modules/dashboard/DashboardPage';
+import ProjectsPage from '../modules/projects/ProjectsPage';
+import TasksPage from '../modules/tasks/TasksPage';
+import AdminUsersPage from '../modules/admin/AdminUsersPage';
+import ProjectDetailsPage from '../modules/projects/ProjectDetailsPage';
+import TaskDetailsPage from '../modules/tasks/TaskDetailsPage';
+
+import AppLayout from '../layouts/AppLayout';
+
 import {
   useAuthStore,
 } from '../store/auth.store';
+
+function TaskDetailsRoute() {
+  const { taskId } = useParams();
+
+  return (
+    <TaskDetailsPage
+      taskId={taskId ?? ''}
+    />
+  );
+}
 
 export default function AppRouter() {
   const user = useAuthStore(
@@ -20,10 +40,7 @@ export default function AppRouter() {
         path="/login"
         element={
           user ? (
-            <Navigate
-              to="/"
-              replace
-            />
+            <Navigate to="/" replace />
           ) : (
             <LoginPage />
           )
@@ -34,25 +51,118 @@ export default function AppRouter() {
         path="/"
         element={
           user ? (
-            <main className="app">
-              <h1>
-                Welcome, {user.name}
-              </h1>
-
-              <p>
-                Role: {user.role}
-              </p>
-
-              <p>
-                Email: {user.email}
-              </p>
-            </main>
+            <AppLayout>
+              <DashboardPage />
+            </AppLayout>
           ) : (
             <Navigate
               to="/login"
               replace
             />
           )
+        }
+      />
+      <Route
+  path="/tasks/:taskId"
+  element={
+    user ? (
+      <AppLayout>
+        <TaskDetailsRoute />
+      </AppLayout>
+    ) : (
+      <Navigate to="/login" replace />
+    )
+  }
+/>
+
+      <Route
+        path="/projects"
+        element={
+          user ? (
+            <AppLayout>
+              <ProjectsPage />
+            </AppLayout>
+          ) : (
+            <Navigate
+              to="/login"
+              replace
+            />
+          )
+        }
+      />
+
+      <Route
+        path="/projects/:projectId"
+        element={
+          user ? (
+            <AppLayout>
+              <ProjectDetailsPage />
+            </AppLayout>
+          ) : (
+            <Navigate
+              to="/login"
+              replace
+            />
+          )
+        }
+      />
+
+      <Route
+        path="/tasks"
+        element={
+          user ? (
+            <AppLayout>
+              <TasksPage />
+            </AppLayout>
+          ) : (
+            <Navigate
+              to="/login"
+              replace
+            />
+          )
+        }
+      />
+
+      <Route
+        path="/tasks/:taskId"
+        element={
+          user ? (
+            <AppLayout>
+              <TaskDetailsPage
+                taskId={
+                  useParams().taskId ?? ''
+                }
+              />
+            </AppLayout>
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+
+      <Route
+        path="/admin/users"
+        element={
+          user?.role === 'ADMIN' ? (
+            <AppLayout>
+              <AdminUsersPage />
+            </AppLayout>
+          ) : (
+            <Navigate
+              to="/"
+              replace
+            />
+          )
+        }
+      />
+
+      <Route
+        path="*"
+        element={
+          <Navigate
+            to={user ? '/' : '/login'}
+            replace
+          />
         }
       />
     </Routes>
