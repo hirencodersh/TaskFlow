@@ -1,11 +1,19 @@
 import './App.css';
 
+import {
+  BrowserRouter,
+} from 'react-router-dom';
+
+import AuthInitializer from './modules/auth/AuthInitializer';
+import AppRouter from './routes/AppRouter';
+
 function App() {
   return (
-    <main className="app">
-      <h1>TaskFlow</h1>
-      <p>Client is running. Features will be added next.</p>
-    </main>
+    <BrowserRouter>
+      <AuthInitializer>
+        <AppRouter />
+      </AuthInitializer>
+    </BrowserRouter>
   );
 }
 

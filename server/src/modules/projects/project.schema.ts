@@ -31,4 +31,12 @@ export const updateProjectSchema = createProjectSchema
     'At least one field is required',
   );
 
+  export const addProjectMemberSchema = z.object({
+  userId: z.string().min(1, 'User ID is required'),
+});
+
+export type AddProjectMemberInput = z.infer<
+  typeof addProjectMemberSchema
+>;
+
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
