@@ -16,8 +16,6 @@ import {
     type TaskStatus,
 } from './tasks.api';
 
-import { useAuthStore } from '../../store/auth.store';
-
 import {
     createTaskComment,
     getTaskComments,
@@ -25,6 +23,15 @@ import {
     deleteTaskComment,
     type TaskComment,
 } from './comments.api';
+
+import {
+    getTaskAttachments,
+    uploadTaskAttachment,
+    deleteTaskAttachment,
+    type TaskAttachment,
+} from './attachments.api';
+
+import { useAuthStore } from '../../store/auth.store';
 
 type TaskDetailsPageProps = {
     taskId: string;
@@ -38,6 +45,13 @@ export default function TaskDetailsPage({
     const currentUser = useAuthStore(
         (state) => state.user,
     );
+
+    const isDeveloper =
+        currentUser?.role === 'DEVELOPER';
+
+    const canEditFullTask =
+        currentUser?.role === 'ADMIN' ||
+        currentUser?.role === 'PROJECT_MANAGER';
 
     const currentUserId = currentUser?.id;
     const currentUserRole = currentUser?.role;
@@ -89,6 +103,21 @@ export default function TaskDetailsPage({
 
     const [commentDeletingId, setCommentDeletingId] =
         useState<string | null>(null);
+
+    const [attachments, setAttachments] =
+        useState<TaskAttachment[]>([]);
+
+    const [attachmentsLoading, setAttachmentsLoading] =
+        useState(true);
+
+    const [attachmentError, setAttachmentError] =
+        useState('');
+
+    const [selectedFile, setSelectedFile] =
+        useState<File | null>(null);
+
+    const [attachmentUploading, setAttachmentUploading] =
+        useState(false);
 
     const [form, setForm] = useState({
         title: '',
@@ -161,8 +190,43 @@ export default function TaskDetailsPage({
         loadComments();
     }, [taskId]);
 
+    useEffect(() => {
+        async function loadAttachments() {
+            try {
+                setAttachmentsLoading(true);
+                setAttachmentError('');
+
+                const response =
+                    await getTaskAttachments(taskId);
+
+                setAttachments(
+                    response.data.attachments,
+                );
+            } catch {
+                setAttachmentError(
+                    'Failed to load attachments.',
+                );
+            } finally {
+                setAttachmentsLoading(false);
+            }
+        }
+
+        loadAttachments();
+    }, [taskId]);
+
     function handleEditStart() {
         if (!task) {
+            return;
+        }
+
+        const developerCanEdit =
+            isDeveloper &&
+            task.assigneeId === currentUserId;
+
+        if (
+            !canEditFullTask &&
+            !developerCanEdit
+        ) {
             return;
         }
 
@@ -196,7 +260,30 @@ export default function TaskDetailsPage({
     ) {
         event.preventDefault();
 
-        if (!form.title.trim()) {
+        if (!task) {
+            return;
+        }
+
+        if (isDeveloper) {
+            if (task.assigneeId !== currentUserId) {
+                setFormError(
+                    'You can only update tasks assigned to you.',
+                );
+
+                return;
+            }
+        } else if (!canEditFullTask) {
+            setFormError(
+                'You do not have permission to update this task.',
+            );
+
+            return;
+        }
+
+        if (
+            canEditFullTask &&
+            !form.title.trim()
+        ) {
             setFormError(
                 'Task title is required.',
             );
@@ -208,32 +295,39 @@ export default function TaskDetailsPage({
             setSaving(true);
             setFormError('');
 
-            await updateTask(taskId, {
-                title: form.title.trim(),
-                description:
-                    form.description.trim(),
-                status: form.status,
-                priority: form.priority,
-                dueDate:
-                    form.dueDate || undefined,
-            });
+            if (isDeveloper) {
+                await updateTask(taskId, {
+                    status: form.status,
+                });
+            } else {
+                await updateTask(taskId, {
+                    title: form.title.trim(),
+                    description:
+                        form.description.trim(),
+                    status: form.status,
+                    priority: form.priority,
+                    dueDate:
+                        form.dueDate || undefined,
+                });
+            }
 
             const response =
                 await getTaskById(taskId);
 
-            setTask(response.data.task);
+            const updatedTask =
+                response.data.task;
+
+            setTask(updatedTask);
 
             setForm({
-                title: response.data.task.title,
+                title: updatedTask.title,
                 description:
-                    response.data.task.description ||
-                    '',
-                status: response.data.task.status,
-                priority:
-                    response.data.task.priority,
+                    updatedTask.description || '',
+                status: updatedTask.status,
+                priority: updatedTask.priority,
                 dueDate:
-                    response.data.task.dueDate
-                        ? response.data.task.dueDate.slice(
+                    updatedTask.dueDate
+                        ? updatedTask.dueDate.slice(
                             0,
                             10,
                         )
@@ -251,6 +345,10 @@ export default function TaskDetailsPage({
     }
 
     async function handleDelete() {
+        if (!canEditFullTask) {
+            return;
+        }
+
         const confirmed =
             window.confirm(
                 'Are you sure you want to delete this task?',
@@ -349,9 +447,10 @@ export default function TaskDetailsPage({
     async function handleDeleteComment(
         commentId: string,
     ) {
-        const confirmed = window.confirm(
-            'Are you sure you want to delete this comment?',
-        );
+        const confirmed =
+            window.confirm(
+                'Are you sure you want to delete this comment?',
+            );
 
         if (!confirmed) {
             return;
@@ -375,6 +474,79 @@ export default function TaskDetailsPage({
             );
         } finally {
             setCommentDeletingId(null);
+        }
+    }
+
+    async function handleUploadAttachment() {
+        if (!selectedFile) {
+            return;
+        }
+
+        if (
+            selectedFile.size >
+            5 * 1024 * 1024
+        ) {
+            setAttachmentError(
+                'File size must be 5 MB or less.',
+            );
+
+            return;
+        }
+
+        try {
+            setAttachmentUploading(true);
+            setAttachmentError('');
+
+            const response =
+                await uploadTaskAttachment(
+                    taskId,
+                    selectedFile,
+                );
+
+            setAttachments((current) => [
+                ...current,
+                response.data.attachment,
+            ]);
+
+            setSelectedFile(null);
+        } catch {
+            setAttachmentError(
+                'Failed to upload attachment.',
+            );
+        } finally {
+            setAttachmentUploading(false);
+        }
+    }
+
+    async function handleDeleteAttachment(
+        attachmentId: string,
+    ) {
+        const confirmed =
+            window.confirm(
+                'Are you sure you want to delete this attachment?',
+            );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            setAttachmentError('');
+
+            await deleteTaskAttachment(
+                attachmentId,
+            );
+
+            setAttachments((current) =>
+                current.filter(
+                    (attachment) =>
+                        attachment.id !== attachmentId,
+                ),
+            );
+        } catch {
+            setAttachmentError(
+                'Failed to delete attachment.',
+            );
         }
     }
 
@@ -404,6 +576,14 @@ export default function TaskDetailsPage({
         );
     }
 
+    const developerCanEdit =
+        isDeveloper &&
+        task.assigneeId === currentUserId;
+
+    const canEditTask =
+        canEditFullTask ||
+        developerCanEdit;
+
     return (
         <section className="task-details-page">
             <div className="task-details-header">
@@ -430,25 +610,31 @@ export default function TaskDetailsPage({
 
                     {!editing ? (
                         <>
-                            <button
-                                type="button"
-                                onClick={
-                                    handleEditStart
-                                }
-                                disabled={deleting}
-                            >
-                                Edit Task
-                            </button>
+                            {canEditTask ? (
+                                <button
+                                    type="button"
+                                    onClick={
+                                        handleEditStart
+                                    }
+                                    disabled={deleting}
+                                >
+                                    Edit Task
+                                </button>
+                            ) : null}
 
-                            <button
-                                type="button"
-                                onClick={handleDelete}
-                                disabled={deleting}
-                            >
-                                {deleting
-                                    ? 'Deleting...'
-                                    : 'Delete Task'}
-                            </button>
+                            {canEditFullTask ? (
+                                <button
+                                    type="button"
+                                    onClick={
+                                        handleDelete
+                                    }
+                                    disabled={deleting}
+                                >
+                                    {deleting
+                                        ? 'Deleting...'
+                                        : 'Delete Task'}
+                                </button>
+                            ) : null}
                         </>
                     ) : null}
                 </div>
@@ -456,7 +642,11 @@ export default function TaskDetailsPage({
 
             {editing ? (
                 <div className="task-details-card">
-                    <h2>Edit Task</h2>
+                    <h2>
+                        {isDeveloper
+                            ? 'Update Task Status'
+                            : 'Edit Task'}
+                    </h2>
 
                     {formError ? (
                         <p className="form-error">
@@ -476,6 +666,9 @@ export default function TaskDetailsPage({
                             <input
                                 type="text"
                                 value={form.title}
+                                disabled={
+                                    isDeveloper
+                                }
                                 onChange={(event) =>
                                     setForm((current) => ({
                                         ...current,
@@ -495,6 +688,9 @@ export default function TaskDetailsPage({
                                 rows={5}
                                 value={
                                     form.description
+                                }
+                                disabled={
+                                    isDeveloper
                                 }
                                 onChange={(event) =>
                                     setForm((current) => ({
@@ -548,6 +744,9 @@ export default function TaskDetailsPage({
 
                                 <select
                                     value={form.priority}
+                                    disabled={
+                                        isDeveloper
+                                    }
                                     onChange={(event) =>
                                         setForm((current) => ({
                                             ...current,
@@ -585,6 +784,9 @@ export default function TaskDetailsPage({
                                 type="date"
                                 value={
                                     form.dueDate
+                                }
+                                disabled={
+                                    isDeveloper
                                 }
                                 onChange={(event) =>
                                     setForm((current) => ({
@@ -712,18 +914,26 @@ export default function TaskDetailsPage({
                             {comments.map(
                                 (comment) => {
                                     const canManageComment =
-                                        currentUserRole === 'ADMIN' ||
-                                        currentUserId === comment.authorId;
+                                        currentUserRole ===
+                                            'ADMIN' ||
+                                        currentUserId ===
+                                            comment.authorId;
 
                                     return (
                                         <div
-                                            key={comment.id}
+                                            key={
+                                                comment.id
+                                            }
                                             className="task-comment"
                                         >
                                             <div className="task-comment-header">
                                                 <div>
                                                     <strong>
-                                                        {comment.author.name}
+                                                        {
+                                                            comment
+                                                                .author
+                                                                .name
+                                                        }
                                                     </strong>
 
                                                     <span>
@@ -757,14 +967,18 @@ export default function TaskDetailsPage({
                                                         <button
                                                             type="button"
                                                             onClick={() =>
-                                                                handleDeleteComment(comment.id)
+                                                                handleDeleteComment(
+                                                                    comment.id,
+                                                                )
                                                             }
                                                             disabled={
                                                                 commentUpdating ||
-                                                                commentDeletingId === comment.id
+                                                                commentDeletingId ===
+                                                                    comment.id
                                                             }
                                                         >
-                                                            {commentDeletingId === comment.id
+                                                            {commentDeletingId ===
+                                                            comment.id
                                                                 ? 'Deleting...'
                                                                 : 'Delete'}
                                                         </button>
@@ -772,16 +986,21 @@ export default function TaskDetailsPage({
                                                 ) : null}
                                             </div>
 
-                                            {editingCommentId === comment.id ? (
+                                            {editingCommentId ===
+                                            comment.id ? (
                                                 <div className="task-comment-edit">
                                                     <textarea
                                                         rows={3}
                                                         value={
                                                             editingCommentText
                                                         }
-                                                        onChange={(event) =>
+                                                        onChange={(
+                                                            event,
+                                                        ) =>
                                                             setEditingCommentText(
-                                                                event.target.value,
+                                                                event
+                                                                    .target
+                                                                    .value,
                                                             )
                                                         }
                                                     />
@@ -825,7 +1044,9 @@ export default function TaskDetailsPage({
                                                 </div>
                                             ) : (
                                                 <p>
-                                                    {comment.content}
+                                                    {
+                                                        comment.content
+                                                    }
                                                 </p>
                                             )}
                                         </div>
@@ -864,6 +1085,107 @@ export default function TaskDetailsPage({
                                 : 'Add Comment'}
                         </button>
                     </form>
+                </div>
+            </div>
+
+            <div className="task-details-card">
+                <div className="task-details-section">
+                    <h2>Attachments</h2>
+
+                    <div className="task-attachment-upload">
+                        <input
+                            type="file"
+                            accept=".png,.jpg,.jpeg,.pdf,.docx,.txt"
+                            onChange={(event) =>
+                                setSelectedFile(
+                                    event.target.files?.[0] ||
+                                        null,
+                                )
+                            }
+                            disabled={
+                                attachmentUploading
+                            }
+                        />
+
+                        <button
+                            type="button"
+                            onClick={
+                                handleUploadAttachment
+                            }
+                            disabled={
+                                attachmentUploading ||
+                                !selectedFile
+                            }
+                        >
+                            {attachmentUploading
+                                ? 'Uploading...'
+                                : 'Upload File'}
+                        </button>
+                    </div>
+
+                    {attachmentError ? (
+                        <p className="form-error">
+                            {attachmentError}
+                        </p>
+                    ) : null}
+
+                    {attachmentsLoading ? (
+                        <p>
+                            Loading attachments...
+                        </p>
+                    ) : attachments.length === 0 ? (
+                        <p>
+                            No attachments yet.
+                        </p>
+                    ) : (
+                        <div className="task-attachments-list">
+                            {attachments.map(
+                                (attachment) => (
+                                    <div
+                                        key={
+                                            attachment.id
+                                        }
+                                        className="task-attachment"
+                                    >
+                                        <div>
+                                            <a
+                                                href={
+                                                    attachment.url
+                                                }
+                                                target="_blank"
+                                                rel="noreferrer"
+                                            >
+                                                {
+                                                    attachment.fileName
+                                                }
+                                            </a>
+
+                                            <span>
+                                                {(
+                                                    attachment.size /
+                                                    1024
+                                                ).toFixed(
+                                                    1,
+                                                )}{' '}
+                                                KB
+                                            </span>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                handleDeleteAttachment(
+                                                    attachment.id,
+                                                )
+                                            }
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
+                                ),
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         </section>

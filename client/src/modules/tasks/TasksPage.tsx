@@ -16,6 +16,8 @@ import {
   type TaskStatus,
 } from './tasks.api';
 
+import { useAuthStore } from '../../store/auth.store';
+
 import {
   getProjects,
   getProjectMembers,
@@ -35,6 +37,14 @@ export default function TasksPage() {
       totalPages: 0,
     });
 
+  const currentUser = useAuthStore(
+    (state) => state.user,
+  );
+
+  const canCreateTask =
+    currentUser?.role === 'ADMIN' ||
+    currentUser?.role === 'PROJECT_MANAGER';
+
   const [loading, setLoading] =
     useState(true);
 
@@ -49,6 +59,17 @@ export default function TasksPage() {
 
   const [priority, setPriority] =
     useState<TaskPriority | ''>('');
+
+  const [sortBy, setSortBy] =
+    useState<
+      | 'createdAt'
+      | 'dueDate'
+      | 'priority'
+      | 'title'
+    >('createdAt');
+
+  const [sortOrder, setSortOrder] =
+    useState<'asc' | 'desc'>('desc');
 
   const [page, setPage] =
     useState(1);
@@ -86,12 +107,14 @@ export default function TasksPage() {
 
         const response =
           await getTasks({
-            search: search || undefined,
+            search: search.trim() || undefined,
             status: status || undefined,
             priority:
               priority || undefined,
             page,
             limit: 10,
+            sortBy,
+            sortOrder,
           });
 
         setTasks(
@@ -115,8 +138,31 @@ export default function TasksPage() {
     search,
     status,
     priority,
+    sortBy,
+    sortOrder,
     page,
   ]);
+
+  function handleSearchChange(
+    value: string,
+  ) {
+    setSearch(value);
+    setPage(1);
+  }
+
+  function handleStatusChange(
+    value: TaskStatus | '',
+  ) {
+    setStatus(value);
+    setPage(1);
+  }
+
+  function handlePriorityChange(
+    value: TaskPriority | '',
+  ) {
+    setPriority(value);
+    setPage(1);
+  }
 
   async function handleOpenCreateForm() {
     try {
@@ -233,7 +279,7 @@ export default function TasksPage() {
 
       const response =
         await getTasks({
-          search: search || undefined,
+          search: search.trim() || undefined,
           status: status || undefined,
           priority:
             priority || undefined,
@@ -257,24 +303,21 @@ export default function TasksPage() {
     }
   }
 
-  function handleSearchChange(
-    value: string,
+  function handleSortByChange(
+    value:
+      | 'createdAt'
+      | 'dueDate'
+      | 'priority'
+      | 'title',
   ) {
-    setSearch(value);
+    setSortBy(value);
     setPage(1);
   }
 
-  function handleStatusChange(
-    value: TaskStatus | '',
+  function handleSortOrderChange(
+    value: 'asc' | 'desc',
   ) {
-    setStatus(value);
-    setPage(1);
-  }
-
-  function handlePriorityChange(
-    value: TaskPriority | '',
-  ) {
-    setPriority(value);
+    setSortOrder(value);
     setPage(1);
   }
 
@@ -290,29 +333,28 @@ export default function TasksPage() {
         </div>
 
         <div className="tasks-header-actions">
-          <span className="tasks-count">
-            {pagination.total}{' '}
-            {pagination.total === 1
-              ? 'task'
-              : 'tasks'}
+          <span>
+            {pagination.total} tasks
           </span>
 
-          <button
-            type="button"
-            className="create-task-button"
-            onClick={
-              handleOpenCreateForm
-            }
-          >
-            + Create Task
-          </button>
+          {canCreateTask ? (
+            <button
+              type="button"
+              className="create-task-button"
+              onClick={handleOpenCreateForm}
+            >
+              Create Task
+            </button>
+          ) : null}
         </div>
       </div>
 
       {showCreateForm ? (
         <div className="create-task-card">
           <div className="create-task-header">
-            <h2>Create Task</h2>
+            <h2>
+              Create Task
+            </h2>
 
             <button
               type="button"
@@ -333,9 +375,7 @@ export default function TasksPage() {
 
           <form
             className="create-task-form"
-            onSubmit={
-              handleCreateTask
-            }
+            onSubmit={handleCreateTask}
           >
             <div className="task-form-group">
               <label>
@@ -351,7 +391,6 @@ export default function TasksPage() {
                     event.target.value,
                   )
                 }
-                required
               >
                 <option value="">
                   Select project
@@ -377,6 +416,7 @@ export default function TasksPage() {
 
               <input
                 type="text"
+                placeholder="Enter task title"
                 value={form.title}
                 onChange={(event) =>
                   setForm((current) => ({
@@ -385,8 +425,6 @@ export default function TasksPage() {
                       event.target.value,
                   }))
                 }
-                placeholder="Task title"
-                required
               />
             </div>
 
@@ -396,7 +434,8 @@ export default function TasksPage() {
               </label>
 
               <textarea
-                rows={4}
+                rows={5}
+                placeholder="Enter task description"
                 value={
                   form.description
                 }
@@ -407,7 +446,6 @@ export default function TasksPage() {
                       event.target.value,
                   }))
                 }
-                placeholder="Task description"
               />
             </div>
 
@@ -452,7 +490,9 @@ export default function TasksPage() {
                 </label>
 
                 <select
-                  value={form.priority}
+                  value={
+                    form.priority
+                  }
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
@@ -640,6 +680,54 @@ export default function TasksPage() {
 
           <option value="CRITICAL">
             Critical
+          </option>
+        </select>
+
+        <select
+          value={sortBy}
+          onChange={(event) =>
+            handleSortByChange(
+              event.target.value as
+              | 'createdAt'
+              | 'dueDate'
+              | 'priority'
+              | 'title',
+            )
+          }
+        >
+          <option value="createdAt">
+            Created Date
+          </option>
+
+          <option value="dueDate">
+            Due Date
+          </option>
+
+          <option value="priority">
+            Priority
+          </option>
+
+          <option value="title">
+            Title
+          </option>
+        </select>
+
+        <select
+          value={sortOrder}
+          onChange={(event) =>
+            handleSortOrderChange(
+              event.target.value as
+              | 'asc'
+              | 'desc',
+            )
+          }
+        >
+          <option value="desc">
+            Descending
+          </option>
+
+          <option value="asc">
+            Ascending
           </option>
         </select>
       </div>
