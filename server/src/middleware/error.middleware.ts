@@ -11,6 +11,7 @@ export function errorHandler(
 ) {
   logger.error(error);
 
+  // Multer errors
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(413).json({
@@ -25,6 +26,7 @@ export function errorHandler(
     });
   }
 
+  // File type validation errors
   if (error instanceof Error) {
     if (
       error.message ===
@@ -37,6 +39,7 @@ export function errorHandler(
     }
   }
 
+  // Default server error
   return res.status(500).json({
     success: false,
     message: 'Internal server error',
