@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 
+import { passwordSchema } from './auth.schema.js';
 import {
   requestPasswordReset,
   resetPassword,
@@ -22,9 +23,10 @@ export async function requestReset(
   }
 
   try {
-    const resetToken = await requestPasswordReset(
-      email.trim().toLowerCase(),
-    );
+    const resetToken =
+      await requestPasswordReset(
+        email.trim().toLowerCase(),
+      );
 
     return res.status(200).json({
       success: true,
@@ -58,21 +60,22 @@ export async function reset(
     });
   }
 
-  if (
-    typeof newPassword !== 'string' ||
-    newPassword.length < 8
-  ) {
+  const passwordResult =
+    passwordSchema.safeParse(newPassword);
+
+  if (!passwordResult.success) {
     return res.status(400).json({
       success: false,
       message:
-        'Password must be at least 8 characters',
+        passwordResult.error.issues[0]?.message ??
+        'Invalid password',
     });
   }
 
   try {
     await resetPassword(
       token.trim(),
-      newPassword,
+      passwordResult.data,
     );
 
     return res.status(200).json({

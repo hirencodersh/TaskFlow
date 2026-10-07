@@ -180,7 +180,23 @@ export async function updateProject(
       where: {
         id: projectId,
       },
-      data: input,
+      data: {
+        ...(input.name !== undefined && {
+          name: input.name,
+        }),
+        ...(input.description !== undefined && {
+          description: input.description,
+        }),
+        ...(input.status !== undefined && {
+          status: input.status,
+        }),
+        ...(input.startDate !== undefined && {
+          startDate: input.startDate,
+        }),
+        ...(input.dueDate !== undefined && {
+          dueDate: input.dueDate,
+        }),
+      },
     });
 
   await createActivityLog({
@@ -203,7 +219,6 @@ export async function updateProject(
 
   return updatedProject;
 }
-
 export async function deleteProject(
   projectId: string,
   userId: string,
@@ -499,6 +514,62 @@ export async function removeProjectMember(
         projectId,
         userId: memberUserId,
       },
+    },
+  });
+}
+
+export async function getAvailableProjectUsers(
+  projectId: string,
+  userId: string,
+  userRole: UserRole,
+) {
+  if (userRole === 'DEVELOPER') {
+    throw new Error(
+      'Developers cannot access available project users',
+    );
+  }
+
+  const project = await prisma.project.findUnique({
+    where: {
+      id: projectId,
+    },
+    select: {
+      id: true,
+      ownerId: true,
+    },
+  });
+
+  if (!project) {
+    throw new Error('Project not found');
+  }
+
+  if (
+    userRole !== 'ADMIN' &&
+    project.ownerId !== userId
+  ) {
+    throw new Error(
+      'Only the project owner or admin can access available project users',
+    );
+  }
+
+  return prisma.user.findMany({
+    where: {
+      isActive: true,
+      projectMemberships: {
+        none: {
+          projectId,
+        },
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      isActive: true,
+    },
+    orderBy: {
+      name: 'asc',
     },
   });
 }

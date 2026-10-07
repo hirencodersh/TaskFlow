@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { createActivityLog } from '../activity-logs/activity-log.service.js';
 import { getSocketInstance } from '../../lib/socket-instance.js';
@@ -118,6 +119,13 @@ export async function getTaskById(
           },
         },
       },
+
+      labels: {
+        include: {
+          label: true,
+        },
+      },
+
       assignee: {
         select: {
           id: true,
@@ -125,6 +133,7 @@ export async function getTaskById(
           email: true,
         },
       },
+
       createdBy: {
         select: {
           id: true,
@@ -151,7 +160,10 @@ export async function getTaskById(
       (member) => member.userId === userId,
     );
 
-  if (!isOwner && !isMember) {
+  const isAssignee =
+    task.assignee?.id === userId;
+
+  if (!isOwner && !isMember && !isAssignee) {
     throw new Error(
       'You do not have access to this task',
     );
@@ -159,7 +171,6 @@ export async function getTaskById(
 
   return task;
 }
-
 export async function updateTask(
   userId: string,
   userRole: UserRole,
@@ -353,7 +364,7 @@ export async function getTasks(
     sortOrder,
   } = query;
 
-  const where: any =
+  const where: Prisma.TaskWhereInput =
     userRole === 'ADMIN'
       ? {}
       : userRole === 'PROJECT_MANAGER'
@@ -363,13 +374,20 @@ export async function getTasks(
             },
           }
         : {
-            project: {
-              members: {
-                some: {
-                  userId,
+            OR: [
+              {
+                project: {
+                  members: {
+                    some: {
+                      userId,
+                    },
+                  },
                 },
               },
-            },
+              {
+                assigneeId: userId,
+              },
+            ],
           };
 
   if (search) {

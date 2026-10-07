@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { Prisma } from '@prisma/client';
-
+import { getSocketInstance } from '../../lib/socket-instance.js';
 
 type UserRole =
   | 'ADMIN'
@@ -59,15 +59,40 @@ async function getProjectAccess(
 export async function createActivityLog(
   input: CreateActivityLogInput,
 ) {
-  return prisma.activityLog.create({
-    data: {
-      projectId: input.projectId,
-      taskId: input.taskId,
-      actorId: input.actorId,
-      action: input.action,
-      metadata: input.metadata ?? {},
-    },
-  });
+  const activityLog =
+    await prisma.activityLog.create({
+      data: {
+        projectId: input.projectId,
+        taskId: input.taskId,
+        actorId: input.actorId,
+        action: input.action,
+        metadata: input.metadata ?? {},
+      },
+      include: {
+        actor: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        task: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
+      },
+    });
+
+  const io = getSocketInstance();
+
+  io.to(`project:${input.projectId}`).emit(
+    'activity-log-created',
+    activityLog,
+  );
+
+  return activityLog;
 }
 
 export async function getActivityLogs(
@@ -129,3 +154,4 @@ export async function getActivityLogs(
     },
   };
 }
+

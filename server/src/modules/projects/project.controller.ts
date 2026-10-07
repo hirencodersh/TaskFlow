@@ -7,6 +7,7 @@ import {
   addProjectMember,
   createProject,
   deleteProject,
+  getAvailableProjectUsers,
   getProjectById,
   getProjectMembers,
   getProjects,
@@ -82,6 +83,70 @@ export async function list(req: Request, res: Response) {
       },
     });
   } catch {
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+    });
+  }
+}
+
+export async function getAvailableUsers(
+  req: Request,
+  res: Response,
+) {
+  const user = req as AuthenticatedRequest;
+  const projectId = req.params.projectId;
+
+  if (!projectId) {
+    return res.status(400).json({
+      success: false,
+      message: 'Project ID is required',
+    });
+  }
+
+  try {
+    const users =
+      await getAvailableProjectUsers(
+        projectId,
+        user.userId,
+        user.userRole,
+      );
+
+    return res.status(200).json({
+      success: true,
+      message:
+        'Available project users fetched successfully',
+      data: {
+        users,
+      },
+    });
+  } catch (error) {
+    if (!(error instanceof Error)) {
+      return res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+      });
+    }
+
+    if (error.message === 'Project not found') {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    if (
+      error.message ===
+        'Developers cannot access available project users' ||
+      error.message ===
+        'Only the project owner or admin can access available project users'
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
     return res.status(500).json({
       success: false,
       message: 'Internal server error',
@@ -254,9 +319,9 @@ export async function remove(req: Request, res: Response) {
     }
 
     return res.status(500).json({
-  success: false,
-  message: 'Internal server error',
-});
+      success: false,
+      message: 'Internal server error',
+    });
   }
 }
 

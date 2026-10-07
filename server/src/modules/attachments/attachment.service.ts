@@ -33,6 +33,11 @@ export async function getTaskForAttachment(
           },
         },
       },
+      assignee: {
+        select: {
+          id: true,
+        },
+      },
     },
   });
 
@@ -53,7 +58,14 @@ export async function getTaskForAttachment(
         member.userId === userId,
     );
 
-  if (!isOwner && !isMember) {
+  const isAssignee =
+    task.assignee?.id === userId;
+
+  if (
+    !isOwner &&
+    !isMember &&
+    !isAssignee
+  ) {
     throw new Error(
       'You do not have access to this task',
     );
@@ -170,9 +182,9 @@ export async function uploadAttachmentToCloudinary(
           if (error || !result) {
             return reject(
               error ??
-                new Error(
-                  'Cloudinary upload failed',
-                ),
+              new Error(
+                'Cloudinary upload failed',
+              ),
             );
           }
 

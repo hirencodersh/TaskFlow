@@ -67,9 +67,9 @@ export default function LoginPage() {
         response.data.user,
         response.data.accessToken,
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       const message =
-        error?.response?.data?.message ??
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
         'Login failed. Please try again.';
 
       setServerError(message);

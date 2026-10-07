@@ -8,7 +8,9 @@ export function setSocketInstance(socketServer: Server) {
 
 export function getSocketInstance(): Server {
   if (!io) {
-    throw new Error('Socket.IO server is not initialized');
+    throw new Error(
+      'Socket.IO server is not initialized',
+    );
   }
 
   return io;

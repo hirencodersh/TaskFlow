@@ -43,7 +43,6 @@ const io = new Server(httpServer, {
 
 setSocketInstance(io);
 
-setupSocket(io);
 
 // Middleware
 app.use(httpLogger);
@@ -56,6 +55,7 @@ app.use(
   }),
 );
 
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -66,6 +66,7 @@ setupSocket(io);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/projects', projectRoutes);
 app.use('/api/v1/tasks', taskRoutes);
+
 app.use('/api/v1', commentRoutes);
 app.use('/api/v1', attachmentRoutes);
 app.use('/api/v1/labels', labelRoutes);
@@ -76,6 +77,12 @@ app.use('/api/v1/admin/users', adminRoutes);
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
+  });
+});
+
+app.get('/api/v1/labels-test', (_req, res) => {
+  res.json({
+    status: 'labels-route-reachable',
   });
 });
 

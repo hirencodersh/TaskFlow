@@ -5,12 +5,34 @@ import {
 
 import {
     useNavigate,
+    Link,
+    useParams,
 } from 'react-router-dom';
 
 import {
+    ArrowLeft,
+    Calendar,
+    Clock,
+    User,
+    Tag,
+    MessageSquare,
+    Paperclip,
+    Plus,
+    Trash2,
+    Edit3,
+    FolderKanban,
+    FileText,
+    AlertCircle,
+} from 'lucide-react';
+
+import {
+    assignLabelToTask,
     deleteTask,
+    getProjectLabels,
     getTaskById,
+    removeLabelFromTask,
     updateTask,
+    type Label,
     type Task,
     type TaskPriority,
     type TaskStatus,
@@ -34,12 +56,14 @@ import {
 import { useAuthStore } from '../../store/auth.store';
 
 type TaskDetailsPageProps = {
-    taskId: string;
+    taskId?: string;
 };
 
 export default function TaskDetailsPage({
-    taskId,
+    taskId: propTaskId,
 }: TaskDetailsPageProps) {
+    const { taskId: paramTaskId } = useParams();
+    const taskId = propTaskId || paramTaskId || '';
     const navigate = useNavigate();
 
     const currentUser = useAuthStore(
@@ -58,6 +82,15 @@ export default function TaskDetailsPage({
 
     const [task, setTask] =
         useState<Task | null>(null);
+
+    const [projectLabels, setProjectLabels] =
+        useState<Label[]>([]);
+
+    const [labelError, setLabelError] =
+        useState('');
+
+    const [labelSubmitting, setLabelSubmitting] =
+        useState(false);
 
     const [loading, setLoading] =
         useState(true);
@@ -140,6 +173,15 @@ export default function TaskDetailsPage({
                     response.data.task;
 
                 setTask(loadedTask);
+
+                const labelsResponse =
+                    await getProjectLabels(
+                        loadedTask.projectId,
+                    );
+
+                setProjectLabels(
+                    labelsResponse.data.labels,
+                );
 
                 setForm({
                     title: loadedTask.title,
@@ -447,20 +489,13 @@ export default function TaskDetailsPage({
     async function handleDeleteComment(
         commentId: string,
     ) {
-        const confirmed =
-            window.confirm(
-                'Are you sure you want to delete this comment?',
-            );
-
-        if (!confirmed) {
-            return;
-        }
-
         try {
             setCommentDeletingId(commentId);
             setCommentError('');
 
-            await deleteTaskComment(commentId);
+            await deleteTaskComment(
+                commentId,
+            );
 
             setComments((current) =>
                 current.filter(
@@ -479,17 +514,6 @@ export default function TaskDetailsPage({
 
     async function handleUploadAttachment() {
         if (!selectedFile) {
-            return;
-        }
-
-        if (
-            selectedFile.size >
-            5 * 1024 * 1024
-        ) {
-            setAttachmentError(
-                'File size must be 5 MB or less.',
-            );
-
             return;
         }
 
@@ -521,15 +545,6 @@ export default function TaskDetailsPage({
     async function handleDeleteAttachment(
         attachmentId: string,
     ) {
-        const confirmed =
-            window.confirm(
-                'Are you sure you want to delete this attachment?',
-            );
-
-        if (!confirmed) {
-            return;
-        }
-
         try {
             setAttachmentError('');
 
@@ -550,28 +565,118 @@ export default function TaskDetailsPage({
         }
     }
 
+    async function handleAssignLabel(
+        labelId: string,
+    ) {
+        try {
+            setLabelSubmitting(true);
+            setLabelError('');
+
+            const response =
+                await assignLabelToTask(
+                    taskId,
+                    labelId,
+                );
+
+            setTask((currentTask) =>
+                currentTask
+                    ? {
+                        ...currentTask,
+                        labels: [
+                            ...currentTask.labels,
+                            response.data.taskLabel,
+                        ],
+                    }
+                    : currentTask,
+            );
+        } catch {
+            setLabelError(
+                'Failed to assign label.',
+            );
+        } finally {
+            setLabelSubmitting(false);
+        }
+    }
+
+    async function handleRemoveLabel(
+        labelId: string,
+    ) {
+        try {
+            setLabelSubmitting(true);
+            setLabelError('');
+
+            await removeLabelFromTask(
+                taskId,
+                labelId,
+            );
+
+            setTask((currentTask) =>
+                currentTask
+                    ? {
+                        ...currentTask,
+                        labels:
+                            currentTask.labels.filter(
+                                (taskLabel) =>
+                                    taskLabel.labelId !==
+                                    labelId,
+                            ),
+                    }
+                    : currentTask,
+            );
+        } catch {
+            setLabelError(
+                'Failed to remove label.',
+            );
+        } finally {
+            setLabelSubmitting(false);
+        }
+    }
+
     if (loading) {
         return (
-            <section>
-                <p>Loading task...</p>
+            <section className="task-details-page">
+                <div className="projects-state-card">
+                    <FolderKanban size={28} />
+                    <h3>Loading task...</h3>
+                    <p>Please wait while task details are retrieved.</p>
+                </div>
             </section>
         );
     }
 
     if (error) {
         return (
-            <section>
-                <p className="form-error">
-                    {error}
-                </p>
+            <section className="task-details-page">
+                <div className="projects-state-card projects-error-state">
+                    <h3>Unable to load task</h3>
+                    <p className="form-error">{error}</p>
+                    <Link
+                        to="/tasks"
+                        className="task-back-link"
+                        style={{ marginTop: '16px' }}
+                    >
+                        <ArrowLeft size={16} /> Back to Tasks
+                    </Link>
+                </div>
             </section>
         );
     }
 
     if (!task) {
         return (
-            <section>
-                <p>Task not found.</p>
+            <section className="task-details-page">
+                <div className="projects-state-card">
+                    <FolderKanban size={28} />
+                    <h3>Task not found</h3>
+                    <p>The requested task does not exist or you lack permission to view it.</p>
+                    <Link
+                        to="/tasks"
+                        className="task-back-link"
+                        style={{ marginTop: '16px' }}
+                    >
+                        <ArrowLeft size={16} /> Back to Tasks
+                    </Link>
+                </div>
             </section>
         );
     }
@@ -580,127 +685,128 @@ export default function TaskDetailsPage({
         isDeveloper &&
         task.assigneeId === currentUserId;
 
-    const canEditTask =
-        canEditFullTask ||
-        developerCanEdit;
+    const canEdit =
+        canEditFullTask || developerCanEdit;
 
     return (
         <section className="task-details-page">
             <div className="task-details-header">
                 <div>
+                    <Link
+                        to="/tasks"
+                        className="task-back-link"
+                    >
+                        <ArrowLeft size={16} /> Back to Tasks
+                    </Link>
+
                     <h1>{task.title}</h1>
 
                     <p>
                         Project:{' '}
-                        <strong>
+                        <Link to={`/projects/${task.projectId}`}>
                             {task.project.name}
-                        </strong>
+                        </Link>
                     </p>
                 </div>
 
-                <div className="task-details-header-actions">
+                <div className="task-header-badges">
                     <span
-                        className={`task-status task-status-${task.status.toLowerCase()}`}
+                        className={`task-status-badge task-status-${task.status.toLowerCase()}`}
                     >
-                        {task.status.replace(
-                            '_',
-                            ' ',
-                        )}
+                        {task.status.replace('_', ' ')}
                     </span>
 
-                    {!editing ? (
-                        <>
-                            {canEditTask ? (
-                                <button
-                                    type="button"
-                                    onClick={
-                                        handleEditStart
-                                    }
-                                    disabled={deleting}
-                                >
-                                    Edit Task
-                                </button>
-                            ) : null}
-
-                            {canEditFullTask ? (
-                                <button
-                                    type="button"
-                                    onClick={
-                                        handleDelete
-                                    }
-                                    disabled={deleting}
-                                >
-                                    {deleting
-                                        ? 'Deleting...'
-                                        : 'Delete Task'}
-                                </button>
-                            ) : null}
-                        </>
-                    ) : null}
+                    <span
+                        className={`task-priority-badge task-priority-${task.priority.toLowerCase()}`}
+                    >
+                        {task.priority}
+                    </span>
                 </div>
             </div>
 
-            {editing ? (
-                <div className="task-details-card">
-                    <h2>
-                        {isDeveloper
-                            ? 'Update Task Status'
-                            : 'Edit Task'}
-                    </h2>
+            {formError ? (
+                <p className="form-error" style={{ marginBottom: '16px' }}>
+                    {formError}
+                </p>
+            ) : null}
 
-                    {formError ? (
-                        <p className="form-error">
-                            {formError}
-                        </p>
+            {!editing && canEdit ? (
+                <div className="task-actions-bar">
+                    <button
+                        type="button"
+                        className="task-edit-button"
+                        onClick={handleEditStart}
+                    >
+                        <Edit3 size={15} /> Edit Task
+                    </button>
+
+                    {canEditFullTask ? (
+                        <button
+                            type="button"
+                            className="task-delete-button"
+                            onClick={handleDelete}
+                            disabled={deleting}
+                        >
+                            <Trash2 size={15} /> {deleting ? 'Deleting...' : 'Delete Task'}
+                        </button>
                     ) : null}
+                </div>
+            ) : null}
+
+            {editing ? (
+                <div className="task-form-card">
+                    <div className="task-form-header">
+                        <h2>Edit Task</h2>
+                        <p>Update task details and status.</p>
+                    </div>
 
                     <form
-                        className="task-edit-form"
+                        className="task-form"
                         onSubmit={handleSave}
                     >
-                        <div className="task-form-group">
-                            <label>
-                                Title
-                            </label>
+                        {canEditFullTask ? (
+                            <>
+                                <div className="task-form-group">
+                                    <label>
+                                        Task Title
+                                    </label>
 
-                            <input
-                                type="text"
-                                value={form.title}
-                                disabled={
-                                    isDeveloper
-                                }
-                                onChange={(event) =>
-                                    setForm((current) => ({
-                                        ...current,
-                                        title:
-                                            event.target.value,
-                                    }))
-                                }
-                            />
-                        </div>
+                                    <input
+                                        type="text"
+                                        value={form.title}
+                                        onChange={(event) =>
+                                            setForm((current) => ({
+                                                ...current,
+                                                title:
+                                                    event.target
+                                                        .value,
+                                            }))
+                                        }
+                                        disabled={saving}
+                                    />
+                                </div>
 
-                        <div className="task-form-group">
-                            <label>
-                                Description
-                            </label>
+                                <div className="task-form-group">
+                                    <label>
+                                        Description
+                                    </label>
 
-                            <textarea
-                                rows={5}
-                                value={
-                                    form.description
-                                }
-                                disabled={
-                                    isDeveloper
-                                }
-                                onChange={(event) =>
-                                    setForm((current) => ({
-                                        ...current,
-                                        description:
-                                            event.target.value,
-                                    }))
-                                }
-                            />
-                        </div>
+                                    <textarea
+                                        rows={4}
+                                        value={form.description}
+                                        onChange={(event) =>
+                                            setForm((current) => ({
+                                                ...current,
+                                                description:
+                                                    event.target
+                                                        .value,
+                                            }))
+                                        }
+                                        disabled={saving}
+                                    />
+                                </div>
+                            </>
+                        ) : null}
 
                         <div className="task-form-row">
                             <div className="task-form-group">
@@ -718,6 +824,7 @@ export default function TaskDetailsPage({
                                                     .value as TaskStatus,
                                         }))
                                     }
+                                    disabled={saving}
                                 >
                                     <option value="TODO">
                                         Todo
@@ -745,7 +852,7 @@ export default function TaskDetailsPage({
                                 <select
                                     value={form.priority}
                                     disabled={
-                                        isDeveloper
+                                        isDeveloper || saving
                                     }
                                     onChange={(event) =>
                                         setForm((current) => ({
@@ -786,7 +893,7 @@ export default function TaskDetailsPage({
                                     form.dueDate
                                 }
                                 disabled={
-                                    isDeveloper
+                                    isDeveloper || saving
                                 }
                                 onChange={(event) =>
                                     setForm((current) => ({
@@ -801,6 +908,7 @@ export default function TaskDetailsPage({
                         <div className="task-form-actions">
                             <button
                                 type="button"
+                                className="project-cancel-button"
                                 onClick={
                                     handleEditCancel
                                 }
@@ -811,6 +919,7 @@ export default function TaskDetailsPage({
 
                             <button
                                 type="submit"
+                                className="create-project-submit"
                                 disabled={saving}
                             >
                                 {saving
@@ -823,26 +932,24 @@ export default function TaskDetailsPage({
             ) : (
                 <div className="task-details-card">
                     <div className="task-details-section">
-                        <h2>Description</h2>
+                        <h2><FileText size={18} /> Description</h2>
 
-                        <p>
+                        <p className="task-description-text">
                             {task.description ||
-                                'No description.'}
+                                'No description provided.'}
                         </p>
                     </div>
 
                     <div className="task-details-grid">
-                        <div>
-                            <span>Priority</span>
-
+                        <div className="task-detail-item">
+                            <span><AlertCircle size={14} /> Priority</span>
                             <strong>
                                 {task.priority}
                             </strong>
                         </div>
 
-                        <div>
-                            <span>Assignee</span>
-
+                        <div className="task-detail-item">
+                            <span><User size={14} /> Assignee</span>
                             <strong>
                                 {task.assignee
                                     ? task.assignee.name
@@ -850,9 +957,8 @@ export default function TaskDetailsPage({
                             </strong>
                         </div>
 
-                        <div>
-                            <span>Due Date</span>
-
+                        <div className="task-detail-item">
+                            <span><Calendar size={14} /> Due Date</span>
                             <strong>
                                 {task.dueDate
                                     ? new Date(
@@ -862,25 +968,22 @@ export default function TaskDetailsPage({
                             </strong>
                         </div>
 
-                        <div>
-                            <span>Created By</span>
-
+                        <div className="task-detail-item">
+                            <span><User size={14} /> Created By</span>
                             <strong>
                                 {task.createdBy.name}
                             </strong>
                         </div>
 
-                        <div>
-                            <span>Project Status</span>
-
+                        <div className="task-detail-item">
+                            <span><FolderKanban size={14} /> Project Status</span>
                             <strong>
-                                {task.project.status}
+                                {task.project.status.replace('_', ' ')}
                             </strong>
                         </div>
 
-                        <div>
-                            <span>Created At</span>
-
+                        <div className="task-detail-item">
+                            <span><Clock size={14} /> Created At</span>
                             <strong>
                                 {new Date(
                                     task.createdAt,
@@ -888,12 +991,136 @@ export default function TaskDetailsPage({
                             </strong>
                         </div>
                     </div>
+
+                    {/* Labels */}
+                    <div className="task-details-section" style={{ borderTop: '1px solid var(--tf-border)', marginTop: '24px', paddingTop: '24px' }}>
+                        <h2><Tag size={18} /> Labels</h2>
+
+                        {task.labels &&
+                            task.labels.length > 0 ? (
+                            <div className="task-labels-list">
+                                {task.labels.map(
+                                    (taskLabel) => (
+                                        <div
+                                            key={
+                                                taskLabel.labelId
+                                            }
+                                            className="task-label-chip"
+                                        >
+                                            <span
+                                                className="task-label-color"
+                                                style={{
+                                                    backgroundColor:
+                                                        taskLabel
+                                                            .label
+                                                            .color,
+                                                }}
+                                            />
+
+                                            <span>
+                                                {
+                                                    taskLabel
+                                                        .label
+                                                        .name
+                                                }
+                                            </span>
+
+                                            {canEditFullTask ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        handleRemoveLabel(
+                                                            taskLabel.labelId,
+                                                        )
+                                                    }
+                                                    disabled={
+                                                        labelSubmitting
+                                                    }
+                                                    aria-label={`Remove ${taskLabel.label.name}`}
+                                                >
+                                                    ×
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                    ),
+                                )}
+                            </div>
+                        ) : (
+                            <p style={{ color: 'var(--tf-muted)', fontSize: '13px', margin: '12px 0 0' }}>
+                                No labels assigned to this task.
+                            </p>
+                        )}
+
+                        {canEditFullTask ? (
+                            <div className="task-label-add">
+                                <select
+                                    value=""
+                                    onChange={(event) => {
+                                        if (
+                                            event
+                                                .target
+                                                .value
+                                        ) {
+                                            handleAssignLabel(
+                                                event
+                                                    .target
+                                                    .value,
+                                            );
+                                        }
+                                    }}
+                                    disabled={
+                                        labelSubmitting
+                                    }
+                                >
+                                    <option value="">
+                                        + Assign label...
+                                    </option>
+
+                                    {projectLabels
+                                        .filter(
+                                            (label) =>
+                                                !task.labels.some(
+                                                    (
+                                                        taskLabel,
+                                                    ) =>
+                                                        taskLabel.labelId ===
+                                                        label.id,
+                                                ),
+                                        )
+                                        .map(
+                                            (
+                                                label,
+                                            ) => (
+                                                <option
+                                                    key={
+                                                        label.id
+                                                    }
+                                                    value={
+                                                        label.id
+                                                    }
+                                                >
+                                                    {
+                                                        label.name
+                                                    }
+                                                </option>
+                                            ),
+                                        )}
+                                </select>
+                            </div>
+                        ) : null}
+
+                        {labelError ? (
+                            <p className="form-error">
+                                {labelError}
+                            </p>
+                        ) : null}
+                    </div>
                 </div>
             )}
 
             <div className="task-details-card">
                 <div className="task-details-section">
-                    <h2>Comments</h2>
+                    <h2><MessageSquare size={18} /> Comments</h2>
 
                     {commentError ? (
                         <p className="form-error">
@@ -902,12 +1129,12 @@ export default function TaskDetailsPage({
                     ) : null}
 
                     {commentsLoading ? (
-                        <p>
+                        <p style={{ color: 'var(--tf-muted)', fontSize: '13px', margin: '12px 0 0' }}>
                             Loading comments...
                         </p>
                     ) : comments.length === 0 ? (
-                        <p>
-                            No comments yet.
+                        <p style={{ color: 'var(--tf-muted)', fontSize: '13px', margin: '12px 0 0' }}>
+                            No comments yet. Start the conversation below.
                         </p>
                     ) : (
                         <div className="task-comments-list">
@@ -915,9 +1142,9 @@ export default function TaskDetailsPage({
                                 (comment) => {
                                     const canManageComment =
                                         currentUserRole ===
-                                            'ADMIN' ||
+                                        'ADMIN' ||
                                         currentUserId ===
-                                            comment.authorId;
+                                        comment.authorId;
 
                                     return (
                                         <div
@@ -927,25 +1154,29 @@ export default function TaskDetailsPage({
                                             className="task-comment"
                                         >
                                             <div className="task-comment-header">
-                                                <div>
-                                                    <strong>
-                                                        {
-                                                            comment
-                                                                .author
-                                                                .name
-                                                        }
-                                                    </strong>
-
-                                                    <span>
-                                                        {' '}
-                                                        {new Date(
-                                                            comment.createdAt,
-                                                        ).toLocaleDateString()}
-                                                    </span>
+                                                <div className="task-comment-author">
+                                                    <div className="task-comment-avatar">
+                                                        {comment.author.name.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div>
+                                                        <strong>
+                                                            {
+                                                                comment
+                                                                    .author
+                                                                    .name
+                                                            }
+                                                        </strong>
+                                                        <small>
+                                                            <Clock size={11} />{' '}
+                                                            {new Date(
+                                                                comment.createdAt,
+                                                            ).toLocaleDateString()}
+                                                        </small>
+                                                    </div>
                                                 </div>
 
                                                 {canManageComment ? (
-                                                    <div>
+                                                    <div className="task-comment-actions">
                                                         <button
                                                             type="button"
                                                             onClick={() => {
@@ -961,7 +1192,7 @@ export default function TaskDetailsPage({
                                                                 commentUpdating
                                                             }
                                                         >
-                                                            Edit
+                                                            <Edit3 size={12} /> Edit
                                                         </button>
 
                                                         <button
@@ -974,11 +1205,12 @@ export default function TaskDetailsPage({
                                                             disabled={
                                                                 commentUpdating ||
                                                                 commentDeletingId ===
-                                                                    comment.id
+                                                                comment.id
                                                             }
                                                         >
+                                                            <Trash2 size={12} />{' '}
                                                             {commentDeletingId ===
-                                                            comment.id
+                                                                comment.id
                                                                 ? 'Deleting...'
                                                                 : 'Delete'}
                                                         </button>
@@ -987,7 +1219,7 @@ export default function TaskDetailsPage({
                                             </div>
 
                                             {editingCommentId ===
-                                            comment.id ? (
+                                                comment.id ? (
                                                 <div className="task-comment-edit">
                                                     <textarea
                                                         rows={3}
@@ -1005,9 +1237,10 @@ export default function TaskDetailsPage({
                                                         }
                                                     />
 
-                                                    <div>
+                                                    <div className="task-comment-edit-actions">
                                                         <button
                                                             type="button"
+                                                            className="create-project-submit"
                                                             onClick={() =>
                                                                 handleUpdateComment(
                                                                     comment.id,
@@ -1025,6 +1258,7 @@ export default function TaskDetailsPage({
 
                                                         <button
                                                             type="button"
+                                                            className="project-cancel-button"
                                                             onClick={() => {
                                                                 setEditingCommentId(
                                                                     null,
@@ -1043,7 +1277,7 @@ export default function TaskDetailsPage({
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <p>
+                                                <p className="task-comment-content">
                                                     {
                                                         comment.content
                                                     }
@@ -1063,7 +1297,7 @@ export default function TaskDetailsPage({
                         }
                     >
                         <textarea
-                            rows={4}
+                            rows={3}
                             placeholder="Write a comment..."
                             value={commentText}
                             onChange={(event) =>
@@ -1073,24 +1307,27 @@ export default function TaskDetailsPage({
                             }
                         />
 
-                        <button
-                            type="submit"
-                            disabled={
-                                commentSubmitting ||
-                                !commentText.trim()
-                            }
-                        >
-                            {commentSubmitting
-                                ? 'Adding...'
-                                : 'Add Comment'}
-                        </button>
+                        <div className="task-comment-form-actions">
+                            <button
+                                type="submit"
+                                className="create-project-submit"
+                                disabled={
+                                    commentSubmitting ||
+                                    !commentText.trim()
+                                }
+                            >
+                                {commentSubmitting
+                                    ? 'Posting...'
+                                    : 'Post Comment'}
+                            </button>
+                        </div>
                     </form>
                 </div>
             </div>
 
             <div className="task-details-card">
                 <div className="task-details-section">
-                    <h2>Attachments</h2>
+                    <h2><Paperclip size={18} /> Attachments</h2>
 
                     <div className="task-attachment-upload">
                         <input
@@ -1099,7 +1336,7 @@ export default function TaskDetailsPage({
                             onChange={(event) =>
                                 setSelectedFile(
                                     event.target.files?.[0] ||
-                                        null,
+                                    null,
                                 )
                             }
                             disabled={
@@ -1109,6 +1346,7 @@ export default function TaskDetailsPage({
 
                         <button
                             type="button"
+                            className="create-project-submit"
                             onClick={
                                 handleUploadAttachment
                             }
@@ -1117,6 +1355,7 @@ export default function TaskDetailsPage({
                                 !selectedFile
                             }
                         >
+                            <Plus size={15} />
                             {attachmentUploading
                                 ? 'Uploading...'
                                 : 'Upload File'}
@@ -1130,12 +1369,12 @@ export default function TaskDetailsPage({
                     ) : null}
 
                     {attachmentsLoading ? (
-                        <p>
+                        <p style={{ color: 'var(--tf-muted)', fontSize: '13px', margin: '12px 0 0' }}>
                             Loading attachments...
                         </p>
                     ) : attachments.length === 0 ? (
-                        <p>
-                            No attachments yet.
+                        <p style={{ color: 'var(--tf-muted)', fontSize: '13px', margin: '12px 0 0' }}>
+                            No attachments uploaded yet.
                         </p>
                     ) : (
                         <div className="task-attachments-list">
@@ -1147,39 +1386,43 @@ export default function TaskDetailsPage({
                                         }
                                         className="task-attachment"
                                     >
-                                        <div>
-                                            <a
-                                                href={
-                                                    attachment.url
-                                                }
-                                                target="_blank"
-                                                rel="noreferrer"
-                                            >
-                                                {
-                                                    attachment.fileName
-                                                }
-                                            </a>
+                                        <div className="task-attachment-info">
+                                            <Paperclip size={16} />
+                                            <div>
+                                                <a
+                                                    href={
+                                                        attachment.url
+                                                    }
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                >
+                                                    {
+                                                        attachment.fileName
+                                                    }
+                                                </a>
 
-                                            <span>
-                                                {(
-                                                    attachment.size /
-                                                    1024
-                                                ).toFixed(
-                                                    1,
-                                                )}{' '}
-                                                KB
-                                            </span>
+                                                <span>
+                                                    {(
+                                                        attachment.size /
+                                                        1024
+                                                    ).toFixed(
+                                                        1,
+                                                    )}{' '}
+                                                    KB
+                                                </span>
+                                            </div>
                                         </div>
 
                                         <button
                                             type="button"
+                                            className="remove-project-member-button"
                                             onClick={() =>
                                                 handleDeleteAttachment(
                                                     attachment.id,
                                                 )
                                             }
                                         >
-                                            Delete
+                                            <Trash2 size={13} /> Delete
                                         </button>
                                     </div>
                                 ),

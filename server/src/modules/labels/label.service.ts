@@ -28,6 +28,15 @@ async function getProjectAccess(
           userId: true,
         },
       },
+      tasks: {
+        where: {
+          assigneeId: userId,
+        },
+        select: {
+          id: true,
+        },
+        take: 1,
+      },
     },
   });
 
@@ -39,13 +48,22 @@ async function getProjectAccess(
     return project;
   }
 
-  const isOwner = project.ownerId === userId;
+  const isOwner =
+    project.ownerId === userId;
 
-  const isMember = project.members.some(
-    (member) => member.userId === userId,
-  );
+  const isMember =
+    project.members.some(
+      (member) => member.userId === userId,
+    );
 
-  if (!isOwner && !isMember) {
+  const isAssignee =
+    project.tasks.length > 0;
+
+  if (
+    !isOwner &&
+    !isMember &&
+    !isAssignee
+  ) {
     throw new Error(
       'You do not have access to this project',
     );

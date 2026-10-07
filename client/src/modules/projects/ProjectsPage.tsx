@@ -1,4 +1,12 @@
 import {
+  CalendarDays,
+  FolderKanban,
+  Plus,
+  X,
+  ArrowRight,
+} from 'lucide-react';
+
+import {
   useEffect,
   useState,
 } from 'react';
@@ -14,6 +22,8 @@ import {
   type ProjectStatus,
 } from './projects.api';
 
+import { useAuthStore } from '../../store/auth.store';
+
 type ProjectFormData = {
   name: string;
   description: string;
@@ -22,12 +32,18 @@ type ProjectFormData = {
 };
 
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>(
-    [],
-  );
+  const [projects, setProjects] = useState<Project[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const currentUser = useAuthStore(
+    (state) => state.user,
+  );
+
+  const canCreateProject =
+    currentUser?.role === 'ADMIN' ||
+    currentUser?.role === 'PROJECT_MANAGER';
 
   const [showCreateForm, setShowCreateForm] =
     useState(false);
@@ -114,9 +130,9 @@ export default function ProjectsPage() {
       });
 
       setShowCreateForm(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       const message =
-        error?.response?.data?.message ??
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
         'Failed to create project.';
 
       setFormError(message);
@@ -129,33 +145,61 @@ export default function ProjectsPage() {
     <section className="projects-page">
       <div className="projects-header">
         <div>
+          <span className="projects-eyebrow">
+            Workspace
+          </span>
+
           <h1>Projects</h1>
 
           <p>
-            Manage your TaskFlow projects.
+            Organize your work and keep every project
+            moving forward.
           </p>
         </div>
 
-        <button
-          type="button"
-          className="create-project-button"
-          onClick={() => {
-            setShowCreateForm(
-              (current) => !current,
-            );
+        {canCreateProject && (
+          <button
+            type="button"
+            className="create-project-button"
+            onClick={() => {
+              setShowCreateForm(
+                (current) => !current,
+              );
 
-            setFormError('');
-          }}
-        >
-          {showCreateForm
-            ? 'Close'
-            : '+ Create Project'}
-        </button>
+              setFormError('');
+            }}
+          >
+            {showCreateForm ? (
+              <>
+                <X size={17} />
+                Close
+              </>
+            ) : (
+              <>
+                <Plus size={17} />
+                Create Project
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {showCreateForm && (
         <div className="project-form-card">
-          <h2>Create Project</h2>
+          <div className="project-form-header">
+            <div>
+              <span className="project-form-eyebrow">
+                New workspace project
+              </span>
+
+              <h2>Create Project</h2>
+
+              <p>
+                Add the basic details for your new
+                project.
+              </p>
+            </div>
+          </div>
 
           <form
             className="project-form"
@@ -176,7 +220,7 @@ export default function ProjectsPage() {
                     event.target.value,
                   )
                 }
-                placeholder="Enter project name"
+                placeholder="e.g. Website Redesign"
                 disabled={isCreating}
               />
             </div>
@@ -195,7 +239,7 @@ export default function ProjectsPage() {
                     event.target.value,
                   )
                 }
-                placeholder="Enter project description"
+                placeholder="Briefly describe this project..."
                 rows={4}
                 disabled={isCreating}
               />
@@ -281,19 +325,38 @@ export default function ProjectsPage() {
       )}
 
       {loading && (
-        <p>Loading projects...</p>
+        <div className="projects-state-card">
+          <FolderKanban size={28} />
+
+          <h3>Loading projects...</h3>
+
+          <p>
+            Please wait while your workspace loads.
+          </p>
+        </div>
       )}
 
       {error && (
-        <p className="form-error">
-          {error}
-        </p>
+        <div className="projects-state-card projects-error-state">
+          <h3>Unable to load projects</h3>
+
+          <p>{error}</p>
+        </div>
       )}
 
       {!loading &&
         !error &&
         projects.length === 0 && (
-          <p>No projects found.</p>
+          <div className="projects-state-card">
+            <FolderKanban size={32} />
+
+            <h3>No projects yet</h3>
+
+            <p>
+              Create your first project to start
+              organizing your work.
+            </p>
+          </div>
         )}
 
       {!loading &&
@@ -307,7 +370,13 @@ export default function ProjectsPage() {
                 className="project-card"
               >
                 <div className="project-card-top">
-                  <h2>{project.name}</h2>
+                  <div className="project-card-title">
+                    <span className="project-card-icon">
+                      <FolderKanban size={18} />
+                    </span>
+
+                    <h2>{project.name}</h2>
+                  </div>
 
                   <span
                     className={`project-status project-status-${project.status.toLowerCase()}`}
@@ -326,10 +395,16 @@ export default function ProjectsPage() {
 
                 <div className="project-card-footer">
                   <span>
+                    <CalendarDays size={14} />
+
                     Created{' '}
                     {new Date(
                       project.createdAt,
                     ).toLocaleDateString()}
+                  </span>
+
+                  <span className="project-card-arrow">
+                    <ArrowRight size={17} />
                   </span>
                 </div>
               </Link>

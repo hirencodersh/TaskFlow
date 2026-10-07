@@ -1,4 +1,17 @@
 import {
+  ArrowRight,
+  CalendarDays,
+  CheckCircle2,
+  CircleDot,
+  ListTodo,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  UserRound,
+  X,
+} from 'lucide-react';
+
+import {
   useEffect,
   useState,
 } from 'react';
@@ -321,19 +334,33 @@ export default function TasksPage() {
     setPage(1);
   }
 
+  function formatStatus(
+    taskStatus: TaskStatus,
+  ) {
+    return taskStatus
+      .toLowerCase()
+      .replace('_', ' ');
+  }
+
   return (
     <section className="tasks-page">
       <div className="tasks-header">
         <div>
+          <span className="tasks-eyebrow">
+            Workspace
+          </span>
+
           <h1>Tasks</h1>
 
           <p>
-            Manage your TaskFlow tasks.
+            Track, prioritize, and manage your
+            team's work.
           </p>
         </div>
 
         <div className="tasks-header-actions">
-          <span>
+          <span className="tasks-count">
+            <ListTodo size={15} />
             {pagination.total} tasks
           </span>
 
@@ -343,6 +370,7 @@ export default function TasksPage() {
               className="create-task-button"
               onClick={handleOpenCreateForm}
             >
+              <Plus size={17} />
               Create Task
             </button>
           ) : null}
@@ -352,18 +380,29 @@ export default function TasksPage() {
       {showCreateForm ? (
         <div className="create-task-card">
           <div className="create-task-header">
-            <h2>
-              Create Task
-            </h2>
+            <div>
+              <span className="task-form-eyebrow">
+                New task
+              </span>
+
+              <h2>Create Task</h2>
+
+              <p>
+                Add a task and assign it to a
+                project member.
+              </p>
+            </div>
 
             <button
               type="button"
+              className="create-task-close"
               onClick={
                 handleCloseCreateForm
               }
               disabled={formLoading}
+              aria-label="Close create task form"
             >
-              ×
+              <X size={19} />
             </button>
           </div>
 
@@ -378,11 +417,12 @@ export default function TasksPage() {
             onSubmit={handleCreateTask}
           >
             <div className="task-form-group">
-              <label>
+              <label htmlFor="task-project">
                 Project
               </label>
 
               <select
+                id="task-project"
                 value={
                   form.projectId
                 }
@@ -410,11 +450,12 @@ export default function TasksPage() {
             </div>
 
             <div className="task-form-group">
-              <label>
+              <label htmlFor="task-title">
                 Title
               </label>
 
               <input
+                id="task-title"
                 type="text"
                 placeholder="Enter task title"
                 value={form.title}
@@ -429,11 +470,12 @@ export default function TasksPage() {
             </div>
 
             <div className="task-form-group">
-              <label>
+              <label htmlFor="task-description">
                 Description
               </label>
 
               <textarea
+                id="task-description"
                 rows={5}
                 placeholder="Enter task description"
                 value={
@@ -451,11 +493,12 @@ export default function TasksPage() {
 
             <div className="task-form-row">
               <div className="task-form-group">
-                <label>
+                <label htmlFor="task-status">
                   Status
                 </label>
 
                 <select
+                  id="task-status"
                   value={form.status}
                   onChange={(event) =>
                     setForm((current) => ({
@@ -485,11 +528,12 @@ export default function TasksPage() {
               </div>
 
               <div className="task-form-group">
-                <label>
+                <label htmlFor="task-priority">
                   Priority
                 </label>
 
                 <select
+                  id="task-priority"
                   value={
                     form.priority
                   }
@@ -523,11 +567,12 @@ export default function TasksPage() {
 
             <div className="task-form-row">
               <div className="task-form-group">
-                <label>
+                <label htmlFor="task-assignee">
                   Assignee
                 </label>
 
                 <select
+                  id="task-assignee"
                   value={
                     form.assigneeId
                   }
@@ -567,11 +612,12 @@ export default function TasksPage() {
               </div>
 
               <div className="task-form-group">
-                <label>
+                <label htmlFor="task-due-date">
                   Due Date
                 </label>
 
                 <input
+                  id="task-due-date"
                   type="date"
                   value={
                     form.dueDate
@@ -590,6 +636,7 @@ export default function TasksPage() {
             <div className="task-form-actions">
               <button
                 type="button"
+                className="task-form-cancel"
                 onClick={
                   handleCloseCreateForm
                 }
@@ -600,6 +647,7 @@ export default function TasksPage() {
 
               <button
                 type="submit"
+                className="task-form-submit"
                 disabled={formLoading}
               >
                 {formLoading
@@ -612,16 +660,25 @@ export default function TasksPage() {
       ) : null}
 
       <div className="tasks-filters">
-        <input
-          type="text"
-          placeholder="Search tasks..."
-          value={search}
-          onChange={(event) =>
-            handleSearchChange(
-              event.target.value,
-            )
-          }
-        />
+        <div className="tasks-filter-title">
+          <SlidersHorizontal size={17} />
+          <span>Filters</span>
+        </div>
+
+        <div className="tasks-search">
+          <Search size={17} />
+
+          <input
+            type="text"
+            placeholder="Search tasks..."
+            value={search}
+            onChange={(event) =>
+              handleSearchChange(
+                event.target.value,
+              )
+            }
+          />
+        </div>
 
         <select
           value={status}
@@ -688,10 +745,10 @@ export default function TasksPage() {
           onChange={(event) =>
             handleSortByChange(
               event.target.value as
-              | 'createdAt'
-              | 'dueDate'
-              | 'priority'
-              | 'title',
+                | 'createdAt'
+                | 'dueDate'
+                | 'priority'
+                | 'title',
             )
           }
         >
@@ -717,8 +774,8 @@ export default function TasksPage() {
           onChange={(event) =>
             handleSortOrderChange(
               event.target.value as
-              | 'asc'
-              | 'desc',
+                | 'asc'
+                | 'desc',
             )
           }
         >
@@ -733,15 +790,32 @@ export default function TasksPage() {
       </div>
 
       {loading ? (
-        <p>Loading tasks...</p>
-      ) : error ? (
-        <p className="form-error">
-          {error}
-        </p>
-      ) : tasks.length === 0 ? (
-        <div className="tasks-empty">
+        <div className="tasks-state-card">
+          <ListTodo size={28} />
+
+          <h3>Loading tasks...</h3>
+
           <p>
-            No tasks found.
+            Fetching your latest workspace tasks.
+          </p>
+        </div>
+      ) : error ? (
+        <div className="tasks-state-card tasks-error-state">
+          <X size={28} />
+
+          <h3>Unable to load tasks</h3>
+
+          <p>{error}</p>
+        </div>
+      ) : tasks.length === 0 ? (
+        <div className="tasks-state-card">
+          <CheckCircle2 size={30} />
+
+          <h3>No tasks found</h3>
+
+          <p>
+            Try changing your filters or create a
+            new task.
           </p>
         </div>
       ) : (
@@ -754,44 +828,52 @@ export default function TasksPage() {
                 className="task-card"
               >
                 <div className="task-card-main">
-                  <div>
-                    <h2>
-                      {task.title}
-                    </h2>
+                  <div className="task-card-title-area">
+                    <div className="task-card-icon">
+                      <ListTodo size={18} />
+                    </div>
 
-                    <p>
-                      {task.description ||
-                        'No description.'}
-                    </p>
+                    <div className="task-card-content">
+                      <h2>
+                        {task.title}
+                      </h2>
+
+                      <p>
+                        {task.description ||
+                          'No description.'}
+                      </p>
+                    </div>
                   </div>
 
                   <span
                     className={`task-status task-status-${task.status.toLowerCase()}`}
                   >
-                    {task.status.replace(
-                      '_',
-                      ' ',
-                    )}
+                    {formatStatus(task.status)}
                   </span>
                 </div>
 
                 <div className="task-card-meta">
                   <span>
-                    Project:{' '}
+                    <FolderIcon />
+
                     <strong>
                       {task.project.name}
                     </strong>
                   </span>
 
                   <span>
-                    Priority:{' '}
-                    <strong>
+                    <CircleDot size={14} />
+
+                    <strong
+                      className={`task-priority-text priority-text-${task.priority.toLowerCase()}`}
+                    >
                       {task.priority}
                     </strong>
                   </span>
 
                   <span>
-                    Assignee:{' '}
+                    <UserRound size={14} />
+
                     <strong>
                       {task.assignee
                         ? task.assignee.name
@@ -800,15 +882,21 @@ export default function TasksPage() {
                   </span>
 
                   <span>
-                    Due:{' '}
+                    <CalendarDays size={14} />
+
                     <strong>
                       {task.dueDate
                         ? new Date(
-                          task.dueDate,
-                        ).toLocaleDateString()
+                            task.dueDate,
+                          ).toLocaleDateString()
                         : 'Not set'}
                     </strong>
                   </span>
+
+                  <ArrowRight
+                    className="task-card-arrow"
+                    size={17}
+                  />
                 </div>
               </Link>
             ))}
@@ -855,5 +943,23 @@ export default function TasksPage() {
         </>
       )}
     </section>
+  );
+}
+
+function FolderIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
+    </svg>
   );
 }

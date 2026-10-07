@@ -1,4 +1,3 @@
-
 import { Router } from 'express';
 
 import { requireAuth } from './auth.middleware.js';
@@ -22,35 +21,12 @@ import {
 
 const router = Router();
 
-router.post('/register', register);
-
-router.post('/login', login);
-
+router.post('/register', authRateLimiter, register);
+router.post('/login', authRateLimiter, login);
 router.post('/refresh', refresh);
-
 router.post('/logout', logout);
-
 router.get('/me', requireAuth, me);
-
-router.post('/forgot-password', requestReset);
-router.post('/reset-password', reset);
-
-router.post(
-  '/login',
-  authRateLimiter,
-  login,
-);
-
-router.post(
-  '/forgot-password',
-  authRateLimiter,
-  requestReset,
-);
-
-router.post(
-  '/reset-password',
-  authRateLimiter,
-  reset,
-);
+router.post('/forgot-password', authRateLimiter, requestReset);
+router.post('/reset-password', authRateLimiter, reset);
 
 export default router;

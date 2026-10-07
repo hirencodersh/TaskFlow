@@ -128,11 +128,7 @@ export default function AppRouter() {
         element={
           user ? (
             <AppLayout>
-              <TaskDetailsPage
-                taskId={
-                  useParams().taskId ?? ''
-                }
-              />
+              <TaskDetailsPage />
             </AppLayout>
           ) : (
             <Navigate to="/login" replace />

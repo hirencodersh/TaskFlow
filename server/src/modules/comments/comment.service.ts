@@ -32,6 +32,11 @@ export async function createComment(
           },
         },
       },
+      assignee: {
+        select: {
+          id: true,
+        },
+      },
     },
   });
 
@@ -48,7 +53,14 @@ export async function createComment(
         (member) => member.userId === userId,
       );
 
-    if (!isOwner && !isMember) {
+    const isAssignee =
+      task.assignee?.id === userId;
+
+    if (
+      !isOwner &&
+      !isMember &&
+      !isAssignee
+    ) {
       throw new Error(
         'You do not have access to this task',
       );
@@ -114,6 +126,11 @@ export async function getComments(
           },
         },
       },
+      assignee: {
+        select: {
+          id: true,
+        },
+      },
     },
   });
 
@@ -122,13 +139,18 @@ export async function getComments(
   }
 
   if (userRole !== 'ADMIN') {
-    const isOwner = task.project.ownerId === userId;
+    const isOwner =
+      task.project.ownerId === userId;
 
-    const isMember = task.project.members.some(
-      (member) => member.userId === userId,
-    );
+    const isMember =
+      task.project.members.some(
+        (member) => member.userId === userId,
+      );
 
-    if (!isOwner && !isMember) {
+    const isAssignee =
+      task.assignee?.id === userId;
+
+    if (!isOwner && !isMember && !isAssignee) {
       throw new Error(
         'You do not have access to this task',
       );
@@ -169,6 +191,17 @@ export async function updateComment(
         select: {
           id: true,
           projectId: true,
+          assigneeId: true,
+          project: {
+            select: {
+              ownerId: true,
+              members: {
+                select: {
+                  userId: true,
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -178,13 +211,36 @@ export async function updateComment(
     throw new Error('Comment not found');
   }
 
-  if (
-    userRole !== 'ADMIN' &&
-    comment.authorId !== userId
-  ) {
-    throw new Error(
-      'You can only update your own comments',
-    );
+  if (userRole !== 'ADMIN') {
+    const isOwner =
+      comment.task.project.ownerId === userId;
+
+    const isMember =
+      comment.task.project.members.some(
+        (member) => member.userId === userId,
+      );
+
+    const isAssignee =
+      comment.task.assigneeId === userId;
+
+    const isAuthor =
+      comment.authorId === userId;
+
+    if (
+      !isOwner &&
+      !isMember &&
+      !isAssignee
+    ) {
+      throw new Error(
+        'You do not have access to this task',
+      );
+    }
+
+    if (!isAuthor) {
+      throw new Error(
+        'You can only update your own comments',
+      );
+    }
   }
 
   const updatedComment =
@@ -242,6 +298,17 @@ export async function deleteComment(
         select: {
           id: true,
           projectId: true,
+          assigneeId: true,
+          project: {
+            select: {
+              ownerId: true,
+              members: {
+                select: {
+                  userId: true,
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -251,13 +318,36 @@ export async function deleteComment(
     throw new Error('Comment not found');
   }
 
-  if (
-    userRole !== 'ADMIN' &&
-    comment.authorId !== userId
-  ) {
-    throw new Error(
-      'You can only delete your own comments',
-    );
+  if (userRole !== 'ADMIN') {
+    const isOwner =
+      comment.task.project.ownerId === userId;
+
+    const isMember =
+      comment.task.project.members.some(
+        (member) => member.userId === userId,
+      );
+
+    const isAssignee =
+      comment.task.assigneeId === userId;
+
+    const isAuthor =
+      comment.authorId === userId;
+
+    if (
+      !isOwner &&
+      !isMember &&
+      !isAssignee
+    ) {
+      throw new Error(
+        'You do not have access to this task',
+      );
+    }
+
+    if (!isAuthor) {
+      throw new Error(
+        'You can only delete your own comments',
+      );
+    }
   }
 
   await createActivityLog({

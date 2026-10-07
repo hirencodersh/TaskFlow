@@ -24,6 +24,12 @@ export type TaskProject = {
   status: string;
 };
 
+export type TaskLabel = {
+  taskId: string;
+  labelId: string;
+  label: Label;
+};
+
 export type Task = {
   id: string;
   projectId: string;
@@ -39,6 +45,7 @@ export type Task = {
   project: TaskProject;
   assignee: TaskUser | null;
   createdBy: TaskUser;
+    labels: TaskLabel[];
 };
 
 export type TaskPagination = {
@@ -167,6 +174,122 @@ export async function deleteTask(
       success: boolean;
       message?: string;
     }>(`/tasks/${taskId}`);
+
+  return response.data;
+}
+
+export type Label = {
+  id: string;
+  projectId: string;
+  name: string;
+  color: string;
+  createdAt: string;
+};
+
+export type CreateLabelInput = {
+  projectId: string;
+  name: string;
+  color: string;
+};
+
+type LabelResponse = {
+  success: boolean;
+  message?: string;
+  data: {
+    label: Label;
+  };
+};
+
+type LabelsResponse = {
+  success: boolean;
+  message?: string;
+  data: {
+    labels: Label[];
+  };
+};
+
+export async function createLabel(
+  input: CreateLabelInput,
+) {
+  const response =
+    await api.post<LabelResponse>(
+      '/labels',
+      input,
+    );
+
+  return response.data;
+}
+
+export async function getProjectLabels(
+    projectId: string,
+) {
+    const response =
+        await api.get<LabelsResponse>(
+            `/labels/projects/${projectId}`,
+        );
+
+    return response.data;
+}
+
+export type UpdateLabelInput = {
+  name: string;
+  color: string;
+};
+
+export async function updateLabel(
+  labelId: string,
+  input: UpdateLabelInput,
+) {
+  const response =
+    await api.patch<LabelResponse>(
+      `/labels/${labelId}`,
+      input,
+    );
+
+  return response.data;
+}
+
+export async function deleteLabel(
+  labelId: string,
+) {
+  const response =
+    await api.delete<{
+      success: boolean;
+      message?: string;
+    }>(`/labels/${labelId}`);
+
+  return response.data;
+}
+
+export async function assignLabelToTask(
+  taskId: string,
+  labelId: string,
+) {
+  const response = await api.post<{
+    success: boolean;
+    message?: string;
+    data: {
+      taskLabel: TaskLabel;
+    };
+  }>(`/labels/tasks/${taskId}/labels`, {
+    labelId,
+  });
+
+  return response.data;
+}
+
+export async function removeLabelFromTask(
+  taskId: string,
+  labelId: string,
+) {
+  const response = await api.delete<{
+    success: boolean;
+    message?: string;
+  }>(`/labels/tasks/${taskId}/labels`, {
+    data: {
+      labelId,
+    },
+  });
 
   return response.data;
 }

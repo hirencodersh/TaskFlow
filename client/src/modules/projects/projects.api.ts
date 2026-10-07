@@ -124,10 +124,12 @@ type UsersResponse = {
   };
 };
 
-export async function getUsers() {
+export async function getUsers(
+  projectId: string,
+) {
   const response =
     await api.get<UsersResponse>(
-      '/admin/users',
+      `/projects/${projectId}/users`,
     );
 
   return response.data;
