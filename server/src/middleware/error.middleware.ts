@@ -1,4 +1,4 @@
-import type { Request, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import multer from 'multer';
 
 import { logger } from '../lib/logger.js';
@@ -7,6 +7,7 @@ export function errorHandler(
   error: unknown,
   _req: Request,
   res: Response,
+  _next: NextFunction,
 ) {
   logger.error(error);
 
