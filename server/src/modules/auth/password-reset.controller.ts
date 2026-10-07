@@ -23,18 +23,14 @@ export async function requestReset(
   }
 
   try {
-    const resetToken =
-      await requestPasswordReset(
-        email.trim().toLowerCase(),
-      );
+    await requestPasswordReset(
+      email.trim().toLowerCase(),
+    );
 
     return res.status(200).json({
       success: true,
       message:
-        'If the email exists, a password reset token has been generated',
-      ...(resetToken
-        ? { resetToken }
-        : {}),
+        'If the email exists, a password reset link has been sent to your email',
     });
   } catch {
     return res.status(500).json({

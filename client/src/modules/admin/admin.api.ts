@@ -73,3 +73,30 @@ export async function updateAdminUserStatus(
 
   return response.data;
 }
+
+type CreateAdminUserInput = {
+  name: string;
+  email: string;
+  password: string;
+  role: 'PROJECT_MANAGER' | 'DEVELOPER';
+};
+
+type CreateAdminUserResponse = {
+  success: boolean;
+  message?: string;
+  data: {
+    user: AdminUser;
+  };
+};
+
+export async function createAdminUser(
+  input: CreateAdminUserInput,
+) {
+  const response =
+    await api.post<CreateAdminUserResponse>(
+      '/admin/users',
+      input,
+    );
+
+  return response.data;
+}

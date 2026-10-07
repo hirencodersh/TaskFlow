@@ -6,6 +6,8 @@ import {
 } from 'react-router-dom';
 
 import LoginPage from '../modules/auth/LoginPage';
+import ForgotPasswordPage from '../modules/auth/ForgotPasswordPage';
+import ResetPasswordPage from '../modules/auth/ResetPasswordPage';
 import DashboardPage from '../modules/dashboard/DashboardPage';
 import ProjectsPage from '../modules/projects/ProjectsPage';
 import TasksPage from '../modules/tasks/TasksPage';
@@ -48,6 +50,28 @@ export default function AppRouter() {
       />
 
       <Route
+        path="/forgot-password"
+        element={
+          user ? (
+            <Navigate to="/" replace />
+          ) : (
+            <ForgotPasswordPage />
+          )
+        }
+      />
+
+      <Route
+        path="/reset-password"
+        element={
+          user ? (
+            <Navigate to="/" replace />
+          ) : (
+            <ResetPasswordPage />
+          )
+        }
+      />
+
+      <Route
         path="/"
         element={
           user ? (
@@ -62,18 +86,6 @@ export default function AppRouter() {
           )
         }
       />
-      <Route
-  path="/tasks/:taskId"
-  element={
-    user ? (
-      <AppLayout>
-        <TaskDetailsRoute />
-      </AppLayout>
-    ) : (
-      <Navigate to="/login" replace />
-    )
-  }
-/>
 
       <Route
         path="/projects"
@@ -128,7 +140,7 @@ export default function AppRouter() {
         element={
           user ? (
             <AppLayout>
-              <TaskDetailsPage />
+              <TaskDetailsRoute />
             </AppLayout>
           ) : (
             <Navigate to="/login" replace />

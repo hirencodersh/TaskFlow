@@ -2,6 +2,7 @@ import crypto from 'crypto';
 
 import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../utils/password.js';
+import { sendPasswordResetEmail } from '../../utils/email.js';
 
 const RESET_TOKEN_EXPIRY_MINUTES = 30;
 
@@ -44,9 +45,7 @@ export async function requestPasswordReset(email: string) {
     },
   });
 
-  // Development only.
-  // Later this token will be sent through email.
-  return rawToken;
+  await sendPasswordResetEmail(email, rawToken);
 }
 
 export async function resetPassword(

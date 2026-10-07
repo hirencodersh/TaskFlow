@@ -6,6 +6,7 @@ import { z } from 'zod';
 import {
   zodResolver,
 } from '@hookform/resolvers/zod';
+import { Link } from 'react-router-dom';
 
 import { login } from './auth.api';
 import {
@@ -122,6 +123,20 @@ export default function LoginPage() {
               placeholder="Enter your password"
               {...registerField('password')}
             />
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+              <Link
+                to="/forgot-password"
+                style={{
+                  fontSize: '13px',
+                  color: 'var(--tf-primary, #6366f1)',
+                  textDecoration: 'none',
+                  fontWeight: 600,
+                }}
+              >
+                Forgot Password?
+              </Link>
+            </div>
 
             {errors.password && (
               <p className="form-error">

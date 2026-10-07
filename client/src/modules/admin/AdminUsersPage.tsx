@@ -6,11 +6,14 @@ import {
   User as UserIcon,
   CheckCircle2,
   XCircle,
+  Plus,
+  X,
 } from 'lucide-react';
 import {
   getAdminUsers,
   updateAdminUserRole,
   updateAdminUserStatus,
+  createAdminUser,
   type AdminUser,
 } from './admin.api';
 
@@ -21,29 +24,41 @@ export default function AdminUsersPage() {
   const [updatingUserId, setUpdatingUserId] =
     useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadUsers() {
-      try {
-        setIsLoading(true);
-        setError('');
+  const [showCreateModal, setShowCreateModal] =
+    useState(false);
 
-        const response = await getAdminUsers();
+  const [createName, setCreateName] = useState('');
+  const [createEmail, setCreateEmail] = useState('');
+  const [createPassword, setCreatePassword] = useState('');
+  const [createRole, setCreateRole] = useState<
+    'PROJECT_MANAGER' | 'DEVELOPER'
+  >('DEVELOPER');
+  const [createError, setCreateError] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
-        setUsers(response.data.users);
-      } catch (error) {
-        console.error(
-          'Failed to load users:',
-          error,
-        );
+  async function loadUsers() {
+    try {
+      setIsLoading(true);
+      setError('');
 
-        setError(
-          'Unable to load users. Please try again.',
-        );
-      } finally {
-        setIsLoading(false);
-      }
+      const response = await getAdminUsers();
+
+      setUsers(response.data.users);
+    } catch (error) {
+      console.error(
+        'Failed to load users:',
+        error,
+      );
+
+      setError(
+        'Unable to load users. Please try again.',
+      );
+    } finally {
+      setIsLoading(false);
     }
+  }
 
+  useEffect(() => {
     loadUsers();
   }, []);
 
@@ -125,6 +140,62 @@ export default function AdminUsersPage() {
     }
   }
 
+  async function handleCreateUser(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (
+      !createName.trim() ||
+      !createEmail.trim() ||
+      !createPassword.trim()
+    ) {
+      setCreateError('All fields are required.');
+      return;
+    }
+
+    if (createPassword.length < 8) {
+      setCreateError(
+        'Password must be at least 8 characters.',
+      );
+      return;
+    }
+
+    try {
+      setIsCreating(true);
+      setCreateError('');
+
+      await createAdminUser({
+        name: createName.trim(),
+        email: createEmail.trim(),
+        password: createPassword,
+        role: createRole,
+      });
+
+      setCreateName('');
+      setCreateEmail('');
+      setCreatePassword('');
+      setCreateRole('DEVELOPER');
+      setShowCreateModal(false);
+
+      await loadUsers();
+    } catch (error: unknown) {
+      const message =
+        (
+          error as {
+            response?: {
+              data?: { message?: string };
+            };
+          }
+        )?.response?.data?.message ??
+        'Failed to create user. Please try again.';
+
+      setCreateError(message);
+    } finally {
+      setIsCreating(false);
+    }
+  }
+
   return (
     <section className="admin-users-page">
       <div className="admin-users-header">
@@ -134,6 +205,17 @@ export default function AdminUsersPage() {
             Manage TaskFlow system users, roles, and access permissions.
           </p>
         </div>
+
+        <button
+          type="button"
+          className="add-project-member-button"
+          onClick={() => {
+            setCreateError('');
+            setShowCreateModal(true);
+          }}
+        >
+          <Plus size={16} /> Add User
+        </button>
       </div>
 
       <div className="admin-users-card">
@@ -262,6 +344,133 @@ export default function AdminUsersPage() {
           </>
         )}
       </div>
+
+      {showCreateModal ? (
+        <div className="add-member-modal">
+          <div className="add-member-modal-card">
+            <div className="add-member-modal-header">
+              <h2>Add New User</h2>
+
+              <button
+                type="button"
+                onClick={() =>
+                  !isCreating &&
+                  setShowCreateModal(false)
+                }
+                disabled={isCreating}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {createError ? (
+              <p className="form-error">{createError}</p>
+            ) : null}
+
+            <form onSubmit={handleCreateUser}>
+              <div className="project-form-group">
+                <label htmlFor="create-name">
+                  Full Name
+                </label>
+                <input
+                  id="create-name"
+                  type="text"
+                  placeholder="John Doe"
+                  value={createName}
+                  onChange={(e) =>
+                    setCreateName(e.target.value)
+                  }
+                  disabled={isCreating}
+                />
+              </div>
+
+              <div className="project-form-group">
+                <label htmlFor="create-email">
+                  Email Address
+                </label>
+                <input
+                  id="create-email"
+                  type="email"
+                  placeholder="john@example.com"
+                  value={createEmail}
+                  onChange={(e) =>
+                    setCreateEmail(e.target.value)
+                  }
+                  disabled={isCreating}
+                />
+              </div>
+
+              <div className="project-form-group">
+                <label htmlFor="create-password">
+                  Password
+                </label>
+                <input
+                  id="create-password"
+                  type="password"
+                  placeholder="At least 8 characters"
+                  value={createPassword}
+                  onChange={(e) =>
+                    setCreatePassword(e.target.value)
+                  }
+                  disabled={isCreating}
+                />
+              </div>
+
+              <div className="project-form-group">
+                <label htmlFor="create-role">
+                  Role
+                </label>
+                <select
+                  id="create-role"
+                  value={createRole}
+                  onChange={(e) =>
+                    setCreateRole(
+                      e.target.value as
+                        | 'PROJECT_MANAGER'
+                        | 'DEVELOPER',
+                    )
+                  }
+                  disabled={isCreating}
+                >
+                  <option value="DEVELOPER">
+                    Developer
+                  </option>
+                  <option value="PROJECT_MANAGER">
+                    Project Manager
+                  </option>
+                </select>
+              </div>
+
+              <div className="add-member-modal-actions">
+                <button
+                  type="button"
+                  onClick={() =>
+                    !isCreating &&
+                    setShowCreateModal(false)
+                  }
+                  disabled={isCreating}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={
+                    isCreating ||
+                    !createName.trim() ||
+                    !createEmail.trim() ||
+                    !createPassword.trim()
+                  }
+                >
+                  {isCreating
+                    ? 'Creating...'
+                    : 'Create User'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -77,3 +77,29 @@ export async function getMe() {
 
   return response.data;
 }
+
+export async function requestPasswordReset(
+  email: string,
+) {
+  const response = await api.post<{
+    success: boolean;
+    message: string;
+  }>('/auth/forgot-password', { email });
+
+  return response.data;
+}
+
+export async function resetPassword(
+  token: string,
+  newPassword: string,
+) {
+  const response = await api.post<{
+    success: boolean;
+    message: string;
+  }>('/auth/reset-password', {
+    token,
+    newPassword,
+  });
+
+  return response.data;
+}

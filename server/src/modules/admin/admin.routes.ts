@@ -9,6 +9,7 @@ import {
 } from '../auth/role.middleware.js';
 
 import {
+  create,
   getOne,
   list,
   updateRole,
@@ -23,6 +24,8 @@ router.use(
 );
 
 router.get('/', list);
+
+router.post('/', create);
 
 router.get('/:id', getOne);
 

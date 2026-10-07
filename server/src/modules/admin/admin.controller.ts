@@ -3,12 +3,14 @@ import type { Request, Response } from 'express';
 import type { AuthenticatedRequest } from '../auth/auth.middleware.js';
 
 import {
+  createUserSchema,
   listUsersQuerySchema,
   updateUserRoleSchema,
   updateUserStatusSchema,
 } from './admin.schema.js';
 
 import {
+  createUser,
   getUserById,
   getUsers,
   updateUserRole,
@@ -192,6 +194,48 @@ export async function updateStatus(
       error instanceof Error &&
       error.message ===
         'You cannot deactivate your own account'
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+    });
+  }
+}
+
+export async function create(
+  req: Request,
+  res: Response,
+) {
+  const result = createUserSchema.safeParse(
+    req.body,
+  );
+
+  if (!result.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: result.error.issues,
+    });
+  }
+
+  try {
+    const user = await createUser(result.data);
+
+    return res.status(201).json({
+      success: true,
+      message: 'User created successfully',
+      data: { user },
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'Email is already in use'
     ) {
       return res.status(400).json({
         success: false,

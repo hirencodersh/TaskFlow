@@ -1,6 +1,8 @@
 import { prisma } from '../../lib/prisma.js';
+import { hashPassword } from '../../utils/password.js';
 
 import type {
+  CreateUserInput,
   ListUsersQuery,
   UpdateUserRoleInput,
   UpdateUserStatusInput,
@@ -174,6 +176,43 @@ export async function updateUserStatus(
       email: true,
       role: true,
       isActive: true,
+      updatedAt: true,
+    },
+  });
+}
+
+export async function createUser(
+  input: CreateUserInput,
+) {
+  const existingUser = await prisma.user.findUnique({
+    where: {
+      email: input.email.toLowerCase(),
+    },
+  });
+
+  if (existingUser) {
+    throw new Error('Email is already in use');
+  }
+
+  const passwordHash = await hashPassword(
+    input.password,
+  );
+
+  return prisma.user.create({
+    data: {
+      name: input.name,
+      email: input.email.toLowerCase(),
+      passwordHash,
+      role: input.role,
+      isActive: true,
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      isActive: true,
+      createdAt: true,
       updatedAt: true,
     },
   });
