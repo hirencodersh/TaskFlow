@@ -53,7 +53,13 @@ import {
     type TaskAttachment,
 } from './attachments.api';
 
+import {
+    getProjectMembers,
+    type ProjectMember,
+} from '../projects/projects.api';
+
 import { useAuthStore } from '../../store/auth.store';
+import { formatDate } from '../../lib/date';
 
 type TaskDetailsPageProps = {
     taskId?: string;
@@ -152,11 +158,15 @@ export default function TaskDetailsPage({
     const [attachmentUploading, setAttachmentUploading] =
         useState(false);
 
+    const [projectMembers, setProjectMembers] =
+        useState<ProjectMember[]>([]);
+
     const [form, setForm] = useState({
         title: '',
         description: '',
         status: 'TODO' as TaskStatus,
         priority: 'MEDIUM' as TaskPriority,
+        assigneeId: '',
         dueDate: '',
     });
 
@@ -189,6 +199,7 @@ export default function TaskDetailsPage({
                         loadedTask.description || '',
                     status: loadedTask.status,
                     priority: loadedTask.priority,
+                    assigneeId: loadedTask.assigneeId || '',
                     dueDate: loadedTask.dueDate
                         ? loadedTask.dueDate.slice(
                             0,
@@ -196,6 +207,19 @@ export default function TaskDetailsPage({
                         )
                         : '',
                 });
+
+                try {
+                    const membersResponse =
+                        await getProjectMembers(
+                            loadedTask.projectId,
+                        );
+
+                    setProjectMembers(
+                        membersResponse.data.members,
+                    );
+                } catch {
+                    // Ignore member fetch failure
+                }
             } catch {
                 setError(
                     'Failed to load task.',
@@ -280,6 +304,7 @@ export default function TaskDetailsPage({
                 task.description || '',
             status: task.status,
             priority: task.priority,
+            assigneeId: task.assigneeId || '',
             dueDate: task.dueDate
                 ? task.dueDate.slice(0, 10)
                 : '',
@@ -348,6 +373,8 @@ export default function TaskDetailsPage({
                         form.description.trim(),
                     status: form.status,
                     priority: form.priority,
+                    assigneeId:
+                        form.assigneeId || undefined,
                     dueDate:
                         form.dueDate || undefined,
                 });
@@ -367,6 +394,7 @@ export default function TaskDetailsPage({
                     updatedTask.description || '',
                 status: updatedTask.status,
                 priority: updatedTask.priority,
+                assigneeId: updatedTask.assigneeId || '',
                 dueDate:
                     updatedTask.dueDate
                         ? updatedTask.dueDate.slice(
@@ -838,9 +866,11 @@ export default function TaskDetailsPage({
                                         In Review
                                     </option>
 
-                                    <option value="DONE">
-                                        Done
-                                    </option>
+                                    {currentUserRole !== 'DEVELOPER' && (
+                                        <option value="DONE">
+                                            Done
+                                        </option>
+                                    )}
                                 </select>
                             </div>
 
@@ -905,6 +935,44 @@ export default function TaskDetailsPage({
                             />
                         </div>
 
+                        {canEditFullTask ? (
+                            <div className="task-form-group">
+                                <label>
+                                    Assignee
+                                </label>
+
+                                <select
+                                    value={form.assigneeId}
+                                    onChange={(event) =>
+                                        setForm((current) => ({
+                                            ...current,
+                                            assigneeId:
+                                                event.target.value,
+                                        }))
+                                    }
+                                    disabled={saving}
+                                >
+                                    <option value="">
+                                        Unassigned
+                                    </option>
+
+                                    {projectMembers
+                                        .filter(
+                                            (member) =>
+                                                member.user.role === 'DEVELOPER',
+                                        )
+                                        .map((member) => (
+                                            <option
+                                                key={member.userId}
+                                                value={member.userId}
+                                            >
+                                                {member.user.name}
+                                            </option>
+                                        ))}
+                                </select>
+                            </div>
+                        ) : null}
+
                         <div className="task-form-actions">
                             <button
                                 type="button"
@@ -960,11 +1028,7 @@ export default function TaskDetailsPage({
                         <div className="task-detail-item">
                             <span><Calendar size={14} /> Due Date</span>
                             <strong>
-                                {task.dueDate
-                                    ? new Date(
-                                        task.dueDate,
-                                    ).toLocaleDateString()
-                                    : 'Not set'}
+                                {formatDate(task.dueDate)}
                             </strong>
                         </div>
 
@@ -985,9 +1049,7 @@ export default function TaskDetailsPage({
                         <div className="task-detail-item">
                             <span><Clock size={14} /> Created At</span>
                             <strong>
-                                {new Date(
-                                    task.createdAt,
-                                ).toLocaleDateString()}
+                                {formatDate(task.createdAt)}
                             </strong>
                         </div>
                     </div>
@@ -1168,9 +1230,9 @@ export default function TaskDetailsPage({
                                                         </strong>
                                                         <small>
                                                             <Clock size={11} />{' '}
-                                                            {new Date(
+                                                            {formatDate(
                                                                 comment.createdAt,
-                                                            ).toLocaleDateString()}
+                                                            )}
                                                         </small>
                                                     </div>
                                                 </div>

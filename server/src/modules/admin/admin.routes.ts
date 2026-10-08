@@ -12,6 +12,7 @@ import {
   create,
   getOne,
   list,
+  remove,
   updateRole,
   updateStatus,
 } from './admin.controller.js';
@@ -32,5 +33,7 @@ router.get('/:id', getOne);
 router.patch('/:id/role', updateRole);
 
 router.patch('/:id/status', updateStatus);
+
+router.delete('/:id', remove);
 
 export default router;

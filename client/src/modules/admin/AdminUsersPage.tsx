@@ -14,6 +14,7 @@ import {
   updateAdminUserRole,
   updateAdminUserStatus,
   createAdminUser,
+  deleteAdminUser,
   type AdminUser,
 } from './admin.api';
 
@@ -126,15 +127,67 @@ export default function AdminUsersPage() {
             : user,
         ),
       );
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(
         'Failed to update user status:',
         error,
       );
 
-      alert(
-        'Unable to update user status. Please try again.',
+      const message =
+        (
+          error as {
+            response?: {
+              data?: { message?: string };
+            };
+          }
+        )?.response?.data?.message ??
+        'Unable to update user status. Please try again.';
+
+      alert(message);
+    } finally {
+      setUpdatingUserId(null);
+    }
+  }
+
+  async function handleDeleteUser(
+    userId: string,
+    userName: string,
+  ) {
+    if (
+      !window.confirm(
+        `Are you sure you want to permanently delete user "${userName}"? This action cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setUpdatingUserId(userId);
+
+      await deleteAdminUser(userId);
+
+      setUsers((currentUsers) =>
+        currentUsers.filter(
+          (user) => user.id !== userId,
+        ),
       );
+    } catch (error: unknown) {
+      console.error(
+        'Failed to delete user:',
+        error,
+      );
+
+      const message =
+        (
+          error as {
+            response?: {
+              data?: { message?: string };
+            };
+          }
+        )?.response?.data?.message ??
+        'Unable to delete user. Please try again.';
+
+      alert(message);
     } finally {
       setUpdatingUserId(null);
     }
@@ -337,6 +390,26 @@ export default function AdminUsersPage() {
                     {user.isActive
                       ? 'Deactivate'
                       : 'Activate'}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={
+                      updatingUserId === user.id
+                    }
+                    className="admin-status-action admin-status-delete"
+                    style={{
+                      background: '#ef4444',
+                      color: '#ffffff',
+                    }}
+                    onClick={() =>
+                      handleDeleteUser(
+                        user.id,
+                        user.name,
+                      )
+                    }
+                  >
+                    Delete
                   </button>
                 </span>
               </div>

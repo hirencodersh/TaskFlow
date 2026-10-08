@@ -13,6 +13,7 @@ import {
   createUser,
   getUserById,
   getUsers,
+  removeUser,
   updateUserRole,
   updateUserStatus,
 } from './admin.service.js';
@@ -236,6 +237,60 @@ export async function create(
     if (
       error instanceof Error &&
       error.message === 'Email is already in use'
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+    });
+  }
+}
+
+export async function remove(
+  req: Request,
+  res: Response,
+) {
+  const userId = req.params.id;
+
+  if (!userId) {
+    return res.status(400).json({
+      success: false,
+      message: 'User ID is required',
+    });
+  }
+
+  const currentUser =
+    req as AuthenticatedRequest;
+
+  try {
+    await removeUser(userId, currentUser.userId);
+
+    return res.status(200).json({
+      success: true,
+      message: 'User deleted successfully',
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'User not found'
+    ) {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    if (
+      error instanceof Error &&
+      (error.message ===
+        'You cannot delete your own account' ||
+        error.message ===
+          'Cannot delete user who owns active projects. Transfer ownership or delete projects first.')
     ) {
       return res.status(400).json({
         success: false,

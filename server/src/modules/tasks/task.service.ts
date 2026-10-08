@@ -49,14 +49,25 @@ export async function createTask(
   }
 
   if (input.assigneeId) {
-    const isMember = project.members.some(
+    const assigneeMember = project.members.find(
       (member) =>
         member.userId === input.assigneeId,
     );
 
-    if (!isMember) {
+    if (!assigneeMember) {
       throw new Error(
         'Assignee must be a project member',
+      );
+    }
+
+    const assigneeUser = await prisma.user.findUnique({
+      where: { id: input.assigneeId },
+      select: { role: true },
+    });
+
+    if (!assigneeUser || assigneeUser.role !== 'DEVELOPER') {
+      throw new Error(
+        'Assignee must be a developer',
       );
     }
   }
@@ -237,6 +248,12 @@ export async function updateTask(
         'Developers can only update task status',
       );
     }
+
+    if (input.status === 'DONE') {
+      throw new Error(
+        'Developers cannot set task status to DONE',
+      );
+    }
   }
 
   if (input.assigneeId) {
@@ -249,6 +266,17 @@ export async function updateTask(
     if (!isAssigneeMember) {
       throw new Error(
         'Assignee must be a project member',
+      );
+    }
+
+    const assigneeUser = await prisma.user.findUnique({
+      where: { id: input.assigneeId },
+      select: { role: true },
+    });
+
+    if (!assigneeUser || assigneeUser.role !== 'DEVELOPER') {
+      throw new Error(
+        'Assignee must be a developer',
       );
     }
   }

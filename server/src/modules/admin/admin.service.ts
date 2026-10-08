@@ -217,3 +217,53 @@ export async function createUser(
     },
   });
 }
+
+export async function removeUser(
+  targetUserId: string,
+  currentUserId: string,
+) {
+  if (targetUserId === currentUserId) {
+    throw new Error('You cannot delete your own account');
+  }
+
+  const user = await prisma.user.findUnique({
+    where: {
+      id: targetUserId,
+    },
+    include: {
+      ownedProjects: true,
+    },
+  });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  if (user.ownedProjects.length > 0) {
+    throw new Error(
+      'Cannot delete user who owns active projects. Transfer ownership or delete projects first.',
+    );
+  }
+
+  // Delete associated tokens and perform deletion
+  await prisma.$transaction([
+    prisma.refreshToken.deleteMany({
+      where: { userId: targetUserId },
+    }),
+    prisma.passwordResetToken.deleteMany({
+      where: { userId: targetUserId },
+    }),
+    prisma.projectMember.deleteMany({
+      where: { userId: targetUserId },
+    }),
+    prisma.task.updateMany({
+      where: { assigneeId: targetUserId },
+      data: { assigneeId: null },
+    }),
+    prisma.user.delete({
+      where: { id: targetUserId },
+    }),
+  ]);
+
+  return true;
+}

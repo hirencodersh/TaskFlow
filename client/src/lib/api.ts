@@ -4,21 +4,19 @@ import { useAuthStore } from '../store/auth.store';
 
 const API_URL = (
   import.meta.env.VITE_API_URL ||
-  'http://localhost:3001'
+  'http://localhost:3001/api/v1'
 ).replace(/\/$/, '');
 
 const api = axios.create({
-  baseURL: `${API_URL}/api/v1`,
+  baseURL: API_URL,
   withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
-  const accessToken =
-    useAuthStore.getState().accessToken;
+  const accessToken = useAuthStore.getState().accessToken;
 
   if (accessToken) {
-    config.headers.Authorization =
-      `Bearer ${accessToken}`;
+    config.headers.Authorization = `Bearer ${accessToken}`;
   }
 
   return config;

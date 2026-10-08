@@ -35,6 +35,7 @@ import {
 } from '../../lib/socket';
 
 import { useAuthStore } from '../../store/auth.store';
+import { formatDate } from '../../lib/date';
 
 import {
     getProjectById,
@@ -704,40 +705,28 @@ export default function ProjectDetailsPage() {
                 <div className="project-detail-item">
                     <span><Calendar size={14} /> Start Date</span>
                     <strong>
-                        {project.startDate
-                            ? new Date(
-                                project.startDate,
-                            ).toLocaleDateString()
-                            : 'Not set'}
+                        {formatDate(project.startDate)}
                     </strong>
                 </div>
 
                 <div className="project-detail-item">
                     <span><Calendar size={14} /> Due Date</span>
                     <strong>
-                        {project.dueDate
-                            ? new Date(
-                                project.dueDate,
-                            ).toLocaleDateString()
-                            : 'Not set'}
+                        {formatDate(project.dueDate)}
                     </strong>
                 </div>
 
                 <div className="project-detail-item">
                     <span><Clock size={14} /> Created</span>
                     <strong>
-                        {new Date(
-                            project.createdAt,
-                        ).toLocaleDateString()}
+                        {formatDate(project.createdAt)}
                     </strong>
                 </div>
 
                 <div className="project-detail-item">
                     <span><Clock size={14} /> Last Updated</span>
                     <strong>
-                        {new Date(
-                            project.updatedAt,
-                        ).toLocaleDateString()}
+                        {formatDate(project.updatedAt)}
                     </strong>
                 </div>
             </div>

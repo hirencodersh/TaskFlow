@@ -30,6 +30,7 @@ import {
 } from './tasks.api';
 
 import { useAuthStore } from '../../store/auth.store';
+import { formatDate } from '../../lib/date';
 
 import {
   getProjects,
@@ -885,11 +886,7 @@ export default function TasksPage() {
                     <CalendarDays size={14} />
 
                     <strong>
-                      {task.dueDate
-                        ? new Date(
-                            task.dueDate,
-                          ).toLocaleDateString()
-                        : 'Not set'}
+                      {formatDate(task.dueDate)}
                     </strong>
                   </span>
 

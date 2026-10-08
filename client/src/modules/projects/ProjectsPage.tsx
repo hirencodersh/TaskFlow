@@ -23,11 +23,13 @@ import {
 } from './projects.api';
 
 import { useAuthStore } from '../../store/auth.store';
+import { formatDate } from '../../lib/date';
 
 type ProjectFormData = {
   name: string;
   description: string;
   status: ProjectStatus;
+  startDate: string;
   dueDate: string;
 };
 
@@ -59,6 +61,7 @@ export default function ProjectsPage() {
       name: '',
       description: '',
       status: 'PLANNING',
+      startDate: '',
       dueDate: '',
     });
 
@@ -113,6 +116,8 @@ export default function ProjectsPage() {
         description:
           formData.description.trim() || undefined,
         status: formData.status,
+        startDate:
+          formData.startDate || undefined,
         dueDate:
           formData.dueDate || undefined,
       });
@@ -126,6 +131,7 @@ export default function ProjectsPage() {
         name: '',
         description: '',
         status: 'PLANNING',
+        startDate: '',
         dueDate: '',
       });
 
@@ -273,6 +279,25 @@ export default function ProjectsPage() {
               </div>
 
               <div className="project-form-group">
+                <label htmlFor="project-start-date">
+                  Start Date
+                </label>
+
+                <input
+                  id="project-start-date"
+                  type="date"
+                  value={formData.startDate}
+                  onChange={(event) =>
+                    handleInputChange(
+                      'startDate',
+                      event.target.value,
+                    )
+                  }
+                  disabled={isCreating}
+                />
+              </div>
+
+              <div className="project-form-group">
                 <label htmlFor="project-due-date">
                   Due Date
                 </label>
@@ -398,9 +423,9 @@ export default function ProjectsPage() {
                     <CalendarDays size={14} />
 
                     Created{' '}
-                    {new Date(
+                    {formatDate(
                       project.createdAt,
-                    ).toLocaleDateString()}
+                    )}
                   </span>
 
                   <span className="project-card-arrow">

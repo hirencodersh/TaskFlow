@@ -100,3 +100,14 @@ export async function createAdminUser(
 
   return response.data;
 }
+
+export async function deleteAdminUser(
+  userId: string,
+) {
+  const response = await api.delete<{
+    success: boolean;
+    message?: string;
+  }>(`/admin/users/${userId}`);
+
+  return response.data;
+}
