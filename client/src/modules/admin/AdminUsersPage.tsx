@@ -297,7 +297,30 @@ export default function AdminUsersPage() {
               <span>Actions</span>
             </div>
 
-            {users.map((user) => (
+            {users
+              .slice()
+              .sort((a, b) => {
+                const roleWeight: Record<
+                  string,
+                  number
+                > = {
+                  ADMIN: 1,
+                  PROJECT_MANAGER: 2,
+                  DEVELOPER: 3,
+                };
+
+                const weightA =
+                  roleWeight[a.role] ?? 99;
+                const weightB =
+                  roleWeight[b.role] ?? 99;
+
+                if (weightA !== weightB) {
+                  return weightA - weightB;
+                }
+
+                return a.name.localeCompare(b.name);
+              })
+              .map((user) => (
               <div
                 key={user.id}
                 className="admin-user-row"
