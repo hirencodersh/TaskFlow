@@ -42,9 +42,12 @@ import {
     getUsers,
     addProjectMember,
     removeProjectMember,
+    updateProject,
+    deleteProject,
     type Project,
     type ProjectMember,
     type AvailableUser,
+    type ProjectStatus,
 } from './projects.api';
 
 import {
@@ -134,6 +137,31 @@ export default function ProjectDetailsPage() {
         user?.role === 'ADMIN' ||
         (user?.role === 'PROJECT_MANAGER' &&
             project?.ownerId === user.id);
+
+    const canManageProject =
+        user?.role === 'ADMIN' ||
+        (user?.role === 'PROJECT_MANAGER' &&
+            project?.ownerId === user.id);
+
+    const [showEditProject, setShowEditProject] =
+        useState(false);
+
+    const [editForm, setEditForm] = useState({
+        name: '',
+        description: '',
+        status: 'PLANNING' as ProjectStatus,
+        startDate: '',
+        dueDate: '',
+    });
+
+    const [editError, setEditError] =
+        useState('');
+
+    const [updatingProject, setUpdatingProject] =
+        useState(false);
+
+    const [deletingProject, setDeletingProject] =
+        useState(false);
 
     const [users, setUsers] =
         useState<AvailableUser[]>([]);
@@ -262,6 +290,96 @@ export default function ProjectDetailsPage() {
             );
         } finally {
             setLabelSubmitting(false);
+        }
+    }
+
+    function handleOpenEdit() {
+        if (!project) {
+            return;
+        }
+
+        setEditForm({
+            name: project.name,
+            description: project.description || '',
+            status: project.status,
+            startDate: project.startDate
+                ? project.startDate.slice(0, 10)
+                : '',
+            dueDate: project.dueDate
+                ? project.dueDate.slice(0, 10)
+                : '',
+        });
+        setEditError('');
+        setShowEditProject(true);
+    }
+
+    function handleCloseEdit() {
+        if (updatingProject) {
+            return;
+        }
+
+        setShowEditProject(false);
+        setEditError('');
+    }
+
+    async function handleSaveProject(
+        event: React.FormEvent<HTMLFormElement>,
+    ) {
+        event.preventDefault();
+
+        if (!projectId || !editForm.name.trim()) {
+            setEditError('Project name is required.');
+            return;
+        }
+
+        try {
+            setUpdatingProject(true);
+            setEditError('');
+
+            const response = await updateProject(
+                projectId,
+                {
+                    name: editForm.name.trim(),
+                    description:
+                        editForm.description.trim() ||
+                        undefined,
+                    status: editForm.status,
+                    startDate:
+                        editForm.startDate || undefined,
+                    dueDate:
+                        editForm.dueDate || undefined,
+                },
+            );
+
+            setProject(response.data.project);
+            setShowEditProject(false);
+        } catch {
+            setEditError('Failed to update project.');
+        } finally {
+            setUpdatingProject(false);
+        }
+    }
+
+    async function handleDeleteProject() {
+        if (!projectId) {
+            return;
+        }
+
+        if (
+            !window.confirm(
+                'Are you sure you want to delete this project? All associated tasks and data will be permanently removed.',
+            )
+        ) {
+            return;
+        }
+
+        try {
+            setDeletingProject(true);
+            await deleteProject(projectId);
+            window.location.href = '/projects';
+        } catch {
+            alert('Failed to delete project.');
+            setDeletingProject(false);
         }
     }
 
@@ -534,14 +652,37 @@ export default function ProjectDetailsPage() {
                     </p>
                 </div>
 
-                <span
-                    className={`project-status project-status-${project.status.toLowerCase()}`}
-                >
-                    {project.status.replace(
-                        '_',
-                        ' ',
-                    )}
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '12px' }}>
+                    <span
+                        className={`project-status project-status-${project.status.toLowerCase()}`}
+                    >
+                        {project.status.replace(
+                            '_',
+                            ' ',
+                        )}
+                    </span>
+
+                    {canManageProject ? (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                                type="button"
+                                className="add-project-member-button"
+                                onClick={handleOpenEdit}
+                                disabled={deletingProject}
+                            >
+                                <Edit3 size={14} /> Edit
+                            </button>
+                            <button
+                                type="button"
+                                className="remove-project-member-button"
+                                onClick={handleDeleteProject}
+                                disabled={deletingProject}
+                            >
+                                <Trash2 size={14} /> {deletingProject ? 'Deleting...' : 'Delete'}
+                            </button>
+                        </div>
+                    ) : null}
+                </div>
             </div>
 
             <div className="project-details-card">
@@ -1023,6 +1164,157 @@ export default function ProjectDetailsPage() {
                     </div>
                 ) : null}
             </section>
+
+            {showEditProject ? (
+                <div className="add-member-modal">
+                    <div className="add-member-modal-card" style={{ maxWidth: '520px' }}>
+                        <div className="add-member-modal-header">
+                            <h2>Edit Project</h2>
+
+                            <button
+                                type="button"
+                                onClick={handleCloseEdit}
+                                disabled={updatingProject}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {editError ? (
+                            <p className="form-error">
+                                {editError}
+                            </p>
+                        ) : null}
+
+                        <form
+                            onSubmit={handleSaveProject}
+                            className="project-form"
+                            style={{ margin: 0, padding: 0, background: 'none', border: 'none', boxShadow: 'none' }}
+                        >
+                            <div className="project-form-group">
+                                <label htmlFor="edit-project-name">
+                                    Project Name
+                                </label>
+                                <input
+                                    id="edit-project-name"
+                                    type="text"
+                                    value={editForm.name}
+                                    onChange={(e) =>
+                                        setEditForm((c) => ({
+                                            ...c,
+                                            name: e.target.value,
+                                        }))
+                                    }
+                                    disabled={updatingProject}
+                                    required
+                                />
+                            </div>
+
+                            <div className="project-form-group">
+                                <label htmlFor="edit-project-desc">
+                                    Description
+                                </label>
+                                <textarea
+                                    id="edit-project-desc"
+                                    rows={3}
+                                    value={editForm.description}
+                                    onChange={(e) =>
+                                        setEditForm((c) => ({
+                                            ...c,
+                                            description: e.target.value,
+                                        }))
+                                    }
+                                    disabled={updatingProject}
+                                />
+                            </div>
+
+                            <div className="project-form-row">
+                                <div className="project-form-group">
+                                    <label htmlFor="edit-project-status">
+                                        Status
+                                    </label>
+                                    <select
+                                        id="edit-project-status"
+                                        value={editForm.status}
+                                        onChange={(e) =>
+                                            setEditForm((c) => ({
+                                                ...c,
+                                                status: e.target.value as ProjectStatus,
+                                            }))
+                                        }
+                                        disabled={updatingProject}
+                                    >
+                                        <option value="PLANNING">Planning</option>
+                                        <option value="ACTIVE">Active</option>
+                                        <option value="COMPLETED">Completed</option>
+                                        <option value="ARCHIVED">Archived</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="project-form-row">
+                                <div className="project-form-group">
+                                    <label htmlFor="edit-project-start">
+                                        Start Date
+                                    </label>
+                                    <input
+                                        id="edit-project-start"
+                                        type="date"
+                                        value={editForm.startDate}
+                                        onChange={(e) =>
+                                            setEditForm((c) => ({
+                                                ...c,
+                                                startDate: e.target.value,
+                                            }))
+                                        }
+                                        disabled={updatingProject}
+                                    />
+                                </div>
+
+                                <div className="project-form-group">
+                                    <label htmlFor="edit-project-due">
+                                        Due Date
+                                    </label>
+                                    <input
+                                        id="edit-project-due"
+                                        type="date"
+                                        value={editForm.dueDate}
+                                        onChange={(e) =>
+                                            setEditForm((c) => ({
+                                                ...c,
+                                                dueDate: e.target.value,
+                                            }))
+                                        }
+                                        disabled={updatingProject}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="add-member-modal-actions">
+                                <button
+                                    type="button"
+                                    onClick={handleCloseEdit}
+                                    disabled={updatingProject}
+                                >
+                                    Cancel
+                                </button>
+
+                                <button
+                                    type="submit"
+                                    disabled={
+                                        !editForm.name.trim() ||
+                                        updatingProject
+                                    }
+                                >
+                                    {updatingProject
+                                        ? 'Saving...'
+                                        : 'Save Changes'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            ) : null}
         </section>
     );
 }

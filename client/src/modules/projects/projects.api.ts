@@ -172,3 +172,43 @@ export async function removeProjectMember(
 
   return response.data;
 }
+
+export type UpdateProjectInput = {
+  name?: string;
+  description?: string;
+  status?: ProjectStatus;
+  startDate?: string;
+  dueDate?: string;
+};
+
+type UpdateProjectResponse = {
+  success: boolean;
+  message?: string;
+  data: {
+    project: Project;
+  };
+};
+
+export async function updateProject(
+  projectId: string,
+  input: UpdateProjectInput,
+) {
+  const response =
+    await api.patch<UpdateProjectResponse>(
+      `/projects/${projectId}`,
+      input,
+    );
+
+  return response.data;
+}
+
+export async function deleteProject(
+  projectId: string,
+) {
+  const response = await api.delete<{
+    success: boolean;
+    message?: string;
+  }>(`/projects/${projectId}`);
+
+  return response.data;
+}
