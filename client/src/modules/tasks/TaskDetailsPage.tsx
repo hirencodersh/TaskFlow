@@ -373,8 +373,8 @@ export default function TaskDetailsPage({
                         form.description.trim(),
                     status: form.status,
                     priority: form.priority,
-                    assigneeId:
-                        form.assigneeId || undefined,
+                    assigneeIds:
+                        form.assigneeId ? [form.assigneeId] : undefined,
                     dueDate:
                         form.dueDate || undefined,
                 });

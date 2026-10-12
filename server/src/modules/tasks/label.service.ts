@@ -3,7 +3,9 @@ import { prisma } from '../../lib/prisma.js';
 type UserRole =
     | 'ADMIN'
     | 'PROJECT_MANAGER'
-    | 'DEVELOPER';
+    | 'DEVELOPER'
+    | 'DESIGNER'
+    | 'QA';
 
 export async function createLabel(
     userId: string,

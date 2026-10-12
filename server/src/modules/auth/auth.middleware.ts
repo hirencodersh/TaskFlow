@@ -6,7 +6,7 @@ import { prisma } from '../../lib/prisma.js';
 
 export type AuthenticatedRequest = Request & {
   userId: string;
-  userRole: 'ADMIN' | 'PROJECT_MANAGER' | 'DEVELOPER';
+  userRole: 'ADMIN' | 'PROJECT_MANAGER' | 'DEVELOPER' | 'DESIGNER' | 'QA';
 };
 
 export async function requireAuth(

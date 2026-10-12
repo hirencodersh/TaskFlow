@@ -4,9 +4,17 @@ import { hashPassword } from '../../utils/password.js';
 import type {
   CreateUserInput,
   ListUsersQuery,
+  UpdateUserPermissionsInput,
   UpdateUserRoleInput,
   UpdateUserStatusInput,
 } from './admin.schema.js';
+
+type UserRole =
+  | 'ADMIN'
+  | 'PROJECT_MANAGER'
+  | 'DEVELOPER'
+  | 'DESIGNER'
+  | 'QA';
 
 export async function getUsers(
   query: ListUsersQuery,
@@ -21,7 +29,7 @@ export async function getUsers(
 
   const skip = (page - 1) * limit;
 
-  const where = {
+  const where: Record<string, unknown> = {
     ...(search
       ? {
           OR: [
@@ -56,6 +64,7 @@ export async function getUsers(
         email: true,
         role: true,
         isActive: true,
+        permissions: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -83,11 +92,11 @@ export async function getUsers(
 }
 
 export async function getUserById(
-  userId: string,
+  targetUserId: string,
 ) {
   const user = await prisma.user.findUnique({
     where: {
-      id: userId,
+      id: targetUserId,
     },
     select: {
       id: true,
@@ -95,8 +104,39 @@ export async function getUserById(
       email: true,
       role: true,
       isActive: true,
+      permissions: true,
       createdAt: true,
       updatedAt: true,
+      assignedTasks: {
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          priority: true,
+          dueDate: true,
+          projectId: true,
+          project: {
+            select: {
+              name: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      },
+      projectMemberships: {
+        include: {
+          project: {
+            select: {
+              id: true,
+              name: true,
+              status: true,
+              ownerId: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -104,7 +144,28 @@ export async function getUserById(
     throw new Error('User not found');
   }
 
-  return user;
+  const totalAssigned = user.assignedTasks.length;
+  const completedTasks = user.assignedTasks.filter(
+    (t) => t.status === 'DONE',
+  ).length;
+  const inProgressTasks = user.assignedTasks.filter(
+    (t) =>
+      t.status === 'IN_PROGRESS' ||
+      t.status === 'IN_REVIEW',
+  ).length;
+  const todoTasks = user.assignedTasks.filter(
+    (t) => t.status === 'TODO',
+  ).length;
+
+  return {
+    ...user,
+    stats: {
+      totalAssigned,
+      completedTasks,
+      inProgressTasks,
+      todoTasks,
+    },
+  };
 }
 
 export async function updateUserRole(
@@ -134,6 +195,74 @@ export async function updateUserRole(
       email: true,
       role: true,
       isActive: true,
+      permissions: true,
+      updatedAt: true,
+    },
+  });
+}
+
+export async function approveUser(
+  targetUserId: string,
+  role: UserRole,
+) {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: targetUserId,
+    },
+  });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  return prisma.user.update({
+    where: {
+      id: targetUserId,
+    },
+    data: {
+      isActive: true,
+      role,
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      isActive: true,
+      permissions: true,
+      updatedAt: true,
+    },
+  });
+}
+
+export async function updateUserPermissions(
+  targetUserId: string,
+  input: UpdateUserPermissionsInput,
+) {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: targetUserId,
+    },
+  });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  return prisma.user.update({
+    where: {
+      id: targetUserId,
+    },
+    data: {
+      permissions: input.permissions,
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      isActive: true,
+      permissions: true,
       updatedAt: true,
     },
   });
@@ -176,6 +305,7 @@ export async function updateUserStatus(
       email: true,
       role: true,
       isActive: true,
+      permissions: true,
       updatedAt: true,
     },
   });
@@ -212,6 +342,7 @@ export async function createUser(
       email: true,
       role: true,
       isActive: true,
+      permissions: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -245,7 +376,6 @@ export async function removeUser(
     );
   }
 
-  // Delete associated tokens and perform deletion
   await prisma.$transaction([
     prisma.refreshToken.deleteMany({
       where: { userId: targetUserId },

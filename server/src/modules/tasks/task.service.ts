@@ -13,16 +13,65 @@ import type {
 type UserRole =
   | 'ADMIN'
   | 'PROJECT_MANAGER'
-  | 'DEVELOPER';
+  | 'DEVELOPER'
+  | 'DESIGNER'
+  | 'QA';
+
+type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE';
+
+async function checkCircularDependency(taskId: string, dependencyIds: string[]) {
+  if (dependencyIds.includes(taskId)) {
+    return true;
+  }
+  for (const depId of dependencyIds) {
+    const visited = new Set<string>();
+    const queue = [depId];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (current === taskId) return true;
+      if (visited.has(current)) continue;
+      visited.add(current);
+
+      const subDeps = await prisma.taskDependency.findMany({
+        where: { taskId: current },
+        select: { dependsOnTaskId: true },
+      });
+      for (const sd of subDeps) {
+        queue.push(sd.dependsOnTaskId);
+      }
+    }
+  }
+  return false;
+}
+
+async function validateTaskDependencies(taskId: string, targetStatus: TaskStatus) {
+  if (targetStatus === 'TODO') return;
+
+  const deps = await prisma.taskDependency.findMany({
+    where: { taskId },
+    include: {
+      dependsOn: {
+        select: { id: true, title: true, status: true },
+      },
+    },
+  });
+
+  const incompleteDeps = deps.filter((d) => d.dependsOn.status !== 'DONE');
+  if (incompleteDeps.length > 0) {
+    throw new Error(
+      `Cannot update task status: blocked by incomplete dependency task(s): ${incompleteDeps.map((d) => d.dependsOn.title).join(', ')}`,
+    );
+  }
+}
 
 export async function createTask(
   userId: string,
   userRole: UserRole,
   input: CreateTaskInput,
 ) {
-  if (userRole === 'DEVELOPER') {
+  if (['DEVELOPER', 'DESIGNER', 'QA'].includes(userRole)) {
     throw new Error(
-      'Developers cannot create tasks',
+      'Developers, designers, and QA cannot create tasks',
     );
   }
 
@@ -48,27 +97,30 @@ export async function createTask(
     );
   }
 
-  if (input.assigneeId) {
-    const assigneeMember = project.members.find(
-      (member) =>
-        member.userId === input.assigneeId,
-    );
+  const assigneeIds = input.assigneeIds ?? (input.assigneeId ? [input.assigneeId] : []);
 
-    if (!assigneeMember) {
-      throw new Error(
-        'Assignee must be a project member',
+  if (assigneeIds.length > 0) {
+    for (const assigneeId of assigneeIds) {
+      const assigneeMember = project.members.find(
+        (member) => member.userId === assigneeId,
       );
-    }
 
-    const assigneeUser = await prisma.user.findUnique({
-      where: { id: input.assigneeId },
-      select: { role: true },
-    });
+      if (!assigneeMember) {
+        throw new Error(
+          'All assignees must be project members',
+        );
+      }
 
-    if (!assigneeUser || assigneeUser.role !== 'DEVELOPER') {
-      throw new Error(
-        'Assignee must be a developer',
-      );
+      const assigneeUser = await prisma.user.findUnique({
+        where: { id: assigneeId },
+        select: { role: true, isActive: true },
+      });
+
+      if (!assigneeUser || !assigneeUser.isActive || !['DEVELOPER', 'DESIGNER', 'QA'].includes(assigneeUser.role)) {
+        throw new Error(
+          'Assignee must be an active developer, designer, or QA',
+        );
+      }
     }
   }
 
@@ -79,11 +131,40 @@ export async function createTask(
       description: input.description,
       status: input.status,
       priority: input.priority,
-      assigneeId: input.assigneeId,
+      assigneeId: assigneeIds[0] ?? null,
       dueDate: input.dueDate,
       createdById: userId,
+      assignees: {
+        create: assigneeIds.map((assigneeId) => ({
+          userId: assigneeId,
+        })),
+      },
+    },
+    include: {
+      assignees: {
+        include: {
+          user: {
+            select: { id: true, name: true, email: true, role: true },
+          },
+        },
+      },
     },
   });
+
+  if (input.dependencyIds && input.dependencyIds.length > 0) {
+    const isCircular = await checkCircularDependency(task.id, input.dependencyIds);
+    if (isCircular) {
+      throw new Error('Circular dependency detected');
+    }
+
+    await prisma.taskDependency.createMany({
+      data: input.dependencyIds.map((depId) => ({
+        taskId: task.id,
+        dependsOnTaskId: depId,
+      })),
+      skipDuplicates: true,
+    });
+  }
 
   await createActivityLog({
     projectId: task.projectId,
@@ -96,13 +177,7 @@ export async function createTask(
   });
 
   const io = getSocketInstance();
-
-  emitProjectEvent(
-    io,
-    task.projectId,
-    'task:created',
-    task,
-  );
+  emitProjectEvent(io, task.projectId, 'task:created', task);
 
   return task;
 }
@@ -130,13 +205,11 @@ export async function getTaskById(
           },
         },
       },
-
       labels: {
         include: {
           label: true,
         },
       },
-
       assignee: {
         select: {
           id: true,
@@ -144,7 +217,27 @@ export async function getTaskById(
           email: true,
         },
       },
-
+      assignees: {
+        include: {
+          user: {
+            select: { id: true, name: true, email: true, role: true },
+          },
+        },
+      },
+      dependencies: {
+        include: {
+          dependsOn: {
+            select: { id: true, title: true, status: true, priority: true },
+          },
+        },
+      },
+      blockers: {
+        include: {
+          task: {
+            select: { id: true, title: true, status: true, priority: true },
+          },
+        },
+      },
       createdBy: {
         select: {
           id: true,
@@ -163,16 +256,13 @@ export async function getTaskById(
     return task;
   }
 
-  const isOwner =
-    task.project.ownerId === userId;
-
-  const isMember =
-    task.project.members.some(
-      (member) => member.userId === userId,
-    );
-
+  const isOwner = task.project.ownerId === userId;
+  const isMember = task.project.members.some(
+    (member) => member.userId === userId,
+  );
   const isAssignee =
-    task.assignee?.id === userId;
+    task.assignee?.id === userId ||
+    task.assignees.some((a) => a.userId === userId);
 
   if (!isOwner && !isMember && !isAssignee) {
     throw new Error(
@@ -182,6 +272,7 @@ export async function getTaskById(
 
   return task;
 }
+
 export async function updateTask(
   userId: string,
   userRole: UserRole,
@@ -198,6 +289,7 @@ export async function updateTask(
           members: true,
         },
       },
+      assignees: true,
     },
   });
 
@@ -206,90 +298,138 @@ export async function updateTask(
   }
 
   const isAdmin = userRole === 'ADMIN';
-
-  const isProjectOwner =
-    task.project.ownerId === userId;
-
-  const isMember =
-    task.project.members.some(
-      (member) => member.userId === userId,
-    );
-
+  const isProjectOwner = task.project.ownerId === userId;
+  const isMember = task.project.members.some(
+    (member) => member.userId === userId,
+  );
   const isAssignee =
-    task.assigneeId === userId;
+    task.assigneeId === userId ||
+    task.assignees.some((a) => a.userId === userId);
 
-  if (
-    !isAdmin &&
-    !isProjectOwner &&
-    !isMember
-  ) {
+  if (!isAdmin && !isProjectOwner && !isMember && !isAssignee) {
     throw new Error(
       'You do not have access to this task',
     );
   }
 
-  if (userRole === 'DEVELOPER') {
+  if (['DEVELOPER', 'DESIGNER'].includes(userRole)) {
     if (!isAssignee) {
       throw new Error(
-        'Developers can only update tasks assigned to them',
+        'Developers and designers can only update tasks assigned to them',
       );
     }
 
-    const developerAllowedFields =
-      Object.keys(input);
-
-    const hasUnauthorizedField =
-      developerAllowedFields.some(
-        (field) => !['status'].includes(field),
-      );
+    const allowedFields = Object.keys(input);
+    const hasUnauthorizedField = allowedFields.some(
+      (field) => !['status'].includes(field),
+    );
 
     if (hasUnauthorizedField) {
       throw new Error(
-        'Developers can only update task status',
+        'Developers and designers can only update task status',
       );
     }
 
     if (input.status === 'DONE') {
       throw new Error(
-        'Developers cannot set task status to DONE',
+        'Developers and designers cannot set task status to DONE',
       );
     }
   }
 
-  if (input.assigneeId) {
-    const isAssigneeMember =
-      task.project.members.some(
-        (member) =>
-          member.userId === input.assigneeId,
+  if (input.status) {
+    await validateTaskDependencies(taskId, input.status);
+  }
+
+  if (input.assigneeIds || input.assigneeId) {
+    const assigneeIds = input.assigneeIds ?? (input.assigneeId ? [input.assigneeId] : []);
+    for (const assigneeId of assigneeIds) {
+      const isAssigneeMember = task.project.members.some(
+        (member) => member.userId === assigneeId,
       );
 
-    if (!isAssigneeMember) {
-      throw new Error(
-        'Assignee must be a project member',
-      );
+      if (!isAssigneeMember) {
+        throw new Error(
+          'Assignee must be a project member',
+        );
+      }
+
+      const assigneeUser = await prisma.user.findUnique({
+        where: { id: assigneeId },
+        select: { role: true, isActive: true },
+      });
+
+      if (!assigneeUser || !assigneeUser.isActive || !['DEVELOPER', 'DESIGNER', 'QA'].includes(assigneeUser.role)) {
+        throw new Error(
+          'Assignee must be an active developer, designer, or QA',
+        );
+      }
     }
 
-    const assigneeUser = await prisma.user.findUnique({
-      where: { id: input.assigneeId },
-      select: { role: true },
+    await prisma.taskAssignee.deleteMany({
+      where: { taskId },
     });
 
-    if (!assigneeUser || assigneeUser.role !== 'DEVELOPER') {
-      throw new Error(
-        'Assignee must be a developer',
-      );
+    if (assigneeIds.length > 0) {
+      await prisma.taskAssignee.createMany({
+        data: assigneeIds.map((assigneeId) => ({
+          taskId,
+          userId: assigneeId,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    input.assigneeId = assigneeIds[0] ?? undefined;
+  }
+
+  if (input.dependencyIds) {
+    const isCircular = await checkCircularDependency(taskId, input.dependencyIds);
+    if (isCircular) {
+      throw new Error('Circular dependency detected');
+    }
+
+    await prisma.taskDependency.deleteMany({
+      where: { taskId },
+    });
+
+    if (input.dependencyIds.length > 0) {
+      await prisma.taskDependency.createMany({
+        data: input.dependencyIds.map((depId) => ({
+          taskId,
+          dependsOnTaskId: depId,
+        })),
+        skipDuplicates: true,
+      });
     }
   }
 
-  const updatedTask =
-    await prisma.task.update({
-      where: {
-        id: taskId,
+  const { assigneeIds: _, dependencyIds: __, ...restInput } = input;
+
+  const updatedTask = await prisma.task.update({
+    where: {
+      id: taskId,
+    },
+    data: {
+      ...restInput,
+    },
+    include: {
+      assignees: {
+        include: {
+          user: {
+            select: { id: true, name: true, email: true, role: true },
+          },
+        },
       },
-      data: {
-        ...input,
+      dependencies: {
+        include: {
+          dependsOn: {
+            select: { id: true, title: true, status: true },
+          },
+        },
       },
-    });
+    },
+  });
 
   await createActivityLog({
     projectId: updatedTask.projectId,
@@ -302,13 +442,7 @@ export async function updateTask(
   });
 
   const io = getSocketInstance();
-
-  emitProjectEvent(
-    io,
-    updatedTask.projectId,
-    'task:updated',
-    updatedTask,
-  );
+  emitProjectEvent(io, updatedTask.projectId, 'task:updated', updatedTask);
 
   return updatedTask;
 }
@@ -335,11 +469,8 @@ export async function deleteTask(
     throw new Error('Task not found');
   }
 
-  const isAdmin =
-    userRole === 'ADMIN';
-
-  const isProjectOwner =
-    task.project.ownerId === userId;
+  const isAdmin = userRole === 'ADMIN';
+  const isProjectOwner = task.project.ownerId === userId;
 
   if (!isAdmin && !isProjectOwner) {
     throw new Error(
@@ -358,16 +489,10 @@ export async function deleteTask(
   });
 
   const io = getSocketInstance();
-
-  emitProjectEvent(
-    io,
-    task.projectId,
-    'task:deleted',
-    {
-      taskId: task.id,
-      projectId: task.projectId,
-    },
-  );
+  emitProjectEvent(io, task.projectId, 'task:deleted', {
+    taskId: task.id,
+    projectId: task.projectId,
+  });
 
   await prisma.task.delete({
     where: {
@@ -415,6 +540,13 @@ export async function getTasks(
               {
                 assigneeId: userId,
               },
+              {
+                assignees: {
+                  some: {
+                    userId,
+                  },
+                },
+              },
             ],
           };
 
@@ -434,49 +566,72 @@ export async function getTasks(
   }
 
   if (assigneeId) {
-    where.assigneeId = assigneeId;
+    where.OR = [
+      { assigneeId },
+      { assignees: { some: { userId: assigneeId } } },
+    ];
   }
 
   const skip = (page - 1) * limit;
 
-  const [tasks, total] =
-    await Promise.all([
-      prisma.task.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: {
-          [sortBy]: sortOrder,
+  const [tasks, total] = await Promise.all([
+    prisma.task.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: {
+        [sortBy]: sortOrder,
+      },
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+          },
         },
-        include: {
-          project: {
-            select: {
-              id: true,
-              name: true,
-              status: true,
-            },
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
           },
-          assignee: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          createdBy: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
+        },
+        assignees: {
+          include: {
+            user: {
+              select: { id: true, name: true, email: true, role: true },
             },
           },
         },
-      }),
+        dependencies: {
+          include: {
+            dependsOn: {
+              select: { id: true, title: true, status: true },
+            },
+          },
+        },
+        blockers: {
+          include: {
+            task: {
+              select: { id: true, title: true, status: true },
+            },
+          },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    }),
 
-      prisma.task.count({
-        where,
-      }),
-    ]);
+    prisma.task.count({
+      where,
+    }),
+  ]);
 
   return {
     tasks,
@@ -484,9 +639,7 @@ export async function getTasks(
       page,
       limit,
       total,
-      totalPages: Math.ceil(
-        total / limit,
-      ),
+      totalPages: Math.ceil(total / limit),
     },
   };
 }

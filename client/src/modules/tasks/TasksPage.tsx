@@ -6,9 +6,10 @@ import {
   ListTodo,
   Plus,
   Search,
-  SlidersHorizontal,
   UserRound,
   X,
+  Kanban,
+  LayoutList,
 } from 'lucide-react';
 
 import {
@@ -23,6 +24,7 @@ import {
 import {
   createTask,
   getTasks,
+  updateTask,
   type Task,
   type TaskPagination,
   type TaskPriority,
@@ -43,10 +45,13 @@ export default function TasksPage() {
   const [tasks, setTasks] =
     useState<Task[]>([]);
 
+  const [viewMode, setViewMode] =
+    useState<'list' | 'kanban'>('list');
+
   const [pagination, setPagination] =
     useState<TaskPagination>({
       page: 1,
-      limit: 10,
+      limit: 20,
       total: 0,
       totalPages: 0,
     });
@@ -74,7 +79,7 @@ export default function TasksPage() {
   const [priority, setPriority] =
     useState<TaskPriority | ''>('');
 
-  const [sortBy, setSortBy] =
+  const [sortBy] =
     useState<
       | 'createdAt'
       | 'dueDate'
@@ -82,7 +87,7 @@ export default function TasksPage() {
       | 'title'
     >('createdAt');
 
-  const [sortOrder, setSortOrder] =
+  const [sortOrder] =
     useState<'asc' | 'desc'>('desc');
 
   const [page, setPage] =
@@ -109,7 +114,7 @@ export default function TasksPage() {
     description: '',
     status: 'TODO' as TaskStatus,
     priority: 'MEDIUM' as TaskPriority,
-    assigneeId: '',
+    assigneeIds: [] as string[],
     dueDate: '',
   });
 
@@ -126,7 +131,7 @@ export default function TasksPage() {
             priority:
               priority || undefined,
             page,
-            limit: 10,
+            limit: viewMode === 'kanban' ? 50 : 20,
             sortBy,
             sortOrder,
           });
@@ -148,57 +153,25 @@ export default function TasksPage() {
     }
 
     loadTasks();
-  }, [
-    search,
-    status,
-    priority,
-    sortBy,
-    sortOrder,
-    page,
-  ]);
+  }, [search, status, priority, page, sortBy, sortOrder, viewMode]);
 
-  function handleSearchChange(
-    value: string,
-  ) {
-    setSearch(value);
-    setPage(1);
-  }
-
-  function handleStatusChange(
-    value: TaskStatus | '',
-  ) {
-    setStatus(value);
-    setPage(1);
-  }
-
-  function handlePriorityChange(
-    value: TaskPriority | '',
-  ) {
-    setPriority(value);
-    setPage(1);
-  }
-
-  async function handleOpenCreateForm() {
-    try {
-      setFormError('');
-
-      const projectsResponse =
-        await getProjects();
-
-      setProjects(
-        projectsResponse.data.projects,
-      );
-
-      setProjectMembers([]);
-
-      setShowCreateForm(true);
-    } catch {
-      setFormError(
-        'Failed to load projects.',
-      );
-
-      setShowCreateForm(true);
+  useEffect(() => {
+    async function loadProjects() {
+      if (!currentUser) return;
+      try {
+        const response = await getProjects();
+        setProjects(response.data.projects);
+      } catch {
+        console.error('Failed to load projects');
+      }
     }
+
+    loadProjects();
+  }, [currentUser]);
+
+  function handleOpenCreateForm() {
+    setFormError('');
+    setShowCreateForm(true);
   }
 
   async function handleProjectChange(
@@ -207,7 +180,7 @@ export default function TasksPage() {
     setForm((current) => ({
       ...current,
       projectId,
-      assigneeId: '',
+      assigneeIds: [],
     }));
 
     setProjectMembers([]);
@@ -248,7 +221,7 @@ export default function TasksPage() {
       description: '',
       status: 'TODO',
       priority: 'MEDIUM',
-      assigneeId: '',
+      assigneeIds: [],
       dueDate: '',
     });
   }
@@ -281,14 +254,12 @@ export default function TasksPage() {
           undefined,
         status: form.status,
         priority: form.priority,
-        assigneeId:
-          form.assigneeId || undefined,
+        assigneeIds: form.assigneeIds.length > 0 ? form.assigneeIds : undefined,
         dueDate:
           form.dueDate || undefined,
       });
 
       handleCloseCreateForm();
-
       setPage(1);
 
       const response =
@@ -298,7 +269,9 @@ export default function TasksPage() {
           priority:
             priority || undefined,
           page: 1,
-          limit: 10,
+          limit: viewMode === 'kanban' ? 50 : 20,
+          sortBy,
+          sortOrder,
         });
 
       setTasks(
@@ -308,31 +281,49 @@ export default function TasksPage() {
       setPagination(
         response.data.pagination,
       );
-    } catch {
-      setFormError(
-        'Failed to create task.',
-      );
+    } catch (error: unknown) {
+      const message =
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Failed to create task.';
+      setFormError(message);
     } finally {
       setFormLoading(false);
     }
   }
 
-  function handleSortByChange(
-    value:
-      | 'createdAt'
-      | 'dueDate'
-      | 'priority'
-      | 'title',
-  ) {
-    setSortBy(value);
-    setPage(1);
+  async function handleStatusChange(taskId: string, newStatus: TaskStatus) {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || task.status === newStatus) return;
+    const previousStatus = task.status;
+
+    // Optimistic update
+    setTasks((current) =>
+      current.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)),
+    );
+
+    try {
+      await updateTask(taskId, { status: newStatus });
+    } catch (error: unknown) {
+      // Revert on failure
+      setTasks((current) =>
+        current.map((t) => (t.id === taskId ? { ...t, status: previousStatus } : t)),
+      );
+      const message =
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Failed to update task status (blocked by dependencies or permissions).';
+      alert(message);
+    }
   }
 
-  function handleSortOrderChange(
-    value: 'asc' | 'desc',
-  ) {
-    setSortOrder(value);
-    setPage(1);
+  function handleDragStart(e: React.DragEvent, taskId: string) {
+    e.dataTransfer.setData('text/plain', taskId);
+  }
+
+  async function handleDrop(e: React.DragEvent, targetStatus: TaskStatus) {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData('text/plain');
+    if (!taskId) return;
+    await handleStatusChange(taskId, targetStatus);
   }
 
   function formatStatus(
@@ -342,6 +333,13 @@ export default function TasksPage() {
       .toLowerCase()
       .replace('_', ' ');
   }
+
+  const kanbanColumns: { status: TaskStatus; label: string }[] = [
+    { status: 'TODO', label: 'To Do' },
+    { status: 'IN_PROGRESS', label: 'In Progress' },
+    { status: 'IN_REVIEW', label: 'In Review' },
+    { status: 'DONE', label: 'Done' },
+  ];
 
   return (
     <section className="tasks-page">
@@ -359,7 +357,24 @@ export default function TasksPage() {
           </p>
         </div>
 
-        <div className="tasks-header-actions">
+        <div className="tasks-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div className="tasks-view-toggle">
+            <button
+              type="button"
+              className={`tasks-view-btn ${viewMode === 'list' ? 'active' : ''}`}
+              onClick={() => setViewMode('list')}
+            >
+              <LayoutList size={16} /> List
+            </button>
+            <button
+              type="button"
+              className={`tasks-view-btn ${viewMode === 'kanban' ? 'active' : ''}`}
+              onClick={() => setViewMode('kanban')}
+            >
+              <Kanban size={16} /> Kanban
+            </button>
+          </div>
+
           <span className="tasks-count">
             <ListTodo size={15} />
             {pagination.total} tasks
@@ -389,8 +404,7 @@ export default function TasksPage() {
               <h2>Create Task</h2>
 
               <p>
-                Add a task and assign it to a
-                project member.
+                Add a task and assign it to project members.
               </p>
             </div>
 
@@ -504,24 +518,23 @@ export default function TasksPage() {
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
-                      status:
-                        event.target
-                          .value as TaskStatus,
+                      status: event
+                        .target
+                        .value as TaskStatus,
                     }))
                   }
                 >
                   <option value="TODO">
-                    Todo
+                    To Do
                   </option>
-
-                  <option value="IN_PROGRESS">
+                  <option
+                    value="IN_PROGRESS"
+                  >
                     In Progress
                   </option>
-
                   <option value="IN_REVIEW">
                     In Review
                   </option>
-
                   <option value="DONE">
                     Done
                   </option>
@@ -541,25 +554,24 @@ export default function TasksPage() {
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
-                      priority:
-                        event.target
-                          .value as TaskPriority,
+                      priority: event
+                        .target
+                        .value as TaskPriority,
                     }))
                   }
                 >
                   <option value="LOW">
                     Low
                   </option>
-
                   <option value="MEDIUM">
                     Medium
                   </option>
-
                   <option value="HIGH">
                     High
                   </option>
-
-                  <option value="CRITICAL">
+                  <option
+                    value="CRITICAL"
+                  >
                     Critical
                   </option>
                 </select>
@@ -567,49 +579,34 @@ export default function TasksPage() {
             </div>
 
             <div className="task-form-row">
-              <div className="task-form-group">
-                <label htmlFor="task-assignee">
-                  Assignee
+              <div className="task-form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>
+                  Assignees (Select multiple)
                 </label>
-
-                <select
-                  id="task-assignee"
-                  value={
-                    form.assigneeId
-                  }
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      assigneeId:
-                        event.target.value,
-                    }))
-                  }
-                  disabled={
-                    !form.projectId ||
-                    projectMembers.length === 0
-                  }
-                >
-                  <option value="">
-                    {form.projectId
-                      ? projectMembers.length === 0
-                        ? 'No project members'
-                        : 'Unassigned'
-                      : 'Select project first'}
-                  </option>
-
-                  {projectMembers.map(
-                    (member) => (
-                      <option
-                        key={member.userId}
-                        value={
-                          member.userId
-                        }
-                      >
-                        {member.user.name}
-                      </option>
-                    ),
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '8px', maxHeight: '140px', overflowY: 'auto', padding: '10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                  {projectMembers.length === 0 ? (
+                    <span style={{ fontSize: '13px', color: '#64748b' }}>Select a project first</span>
+                  ) : (
+                    projectMembers.map((member) => (
+                      <label key={member.userId} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={form.assigneeIds.includes(member.userId)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setForm((current) => ({
+                              ...current,
+                              assigneeIds: checked
+                                ? [...current.assigneeIds, member.userId]
+                                : current.assigneeIds.filter((id) => id !== member.userId),
+                            }));
+                          }}
+                        />
+                        {member.user.name} ({member.user.role})
+                      </label>
+                    ))
                   )}
-                </select>
+                </div>
               </div>
 
               <div className="task-form-group">
@@ -620,9 +617,7 @@ export default function TasksPage() {
                 <input
                   id="task-due-date"
                   type="date"
-                  value={
-                    form.dueDate
-                  }
+                  value={form.dueDate}
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
@@ -661,163 +656,156 @@ export default function TasksPage() {
       ) : null}
 
       <div className="tasks-filters">
-        <div className="tasks-filter-title">
-          <SlidersHorizontal size={17} />
-          <span>Filters</span>
-        </div>
-
         <div className="tasks-search">
           <Search size={17} />
-
           <input
             type="text"
-            placeholder="Search tasks..."
+            placeholder="Search tasks by title..."
             value={search}
-            onChange={(event) =>
-              handleSearchChange(
-                event.target.value,
-              )
-            }
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
           />
         </div>
 
-        <select
-          value={status}
-          onChange={(event) =>
-            handleStatusChange(
-              event.target
-                .value as TaskStatus | '',
-            )
-          }
-        >
-          <option value="">
-            All Statuses
-          </option>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <select
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value as TaskStatus | '');
+              setPage(1);
+            }}
+          >
+            <option value="">All Statuses</option>
+            <option value="TODO">To Do</option>
+            <option value="IN_PROGRESS">In Progress</option>
+            <option value="IN_REVIEW">In Review</option>
+            <option value="DONE">Done</option>
+          </select>
 
-          <option value="TODO">
-            Todo
-          </option>
-
-          <option value="IN_PROGRESS">
-            In Progress
-          </option>
-
-          <option value="IN_REVIEW">
-            In Review
-          </option>
-
-          <option value="DONE">
-            Done
-          </option>
-        </select>
-
-        <select
-          value={priority}
-          onChange={(event) =>
-            handlePriorityChange(
-              event.target
-                .value as TaskPriority | '',
-            )
-          }
-        >
-          <option value="">
-            All Priorities
-          </option>
-
-          <option value="LOW">
-            Low
-          </option>
-
-          <option value="MEDIUM">
-            Medium
-          </option>
-
-          <option value="HIGH">
-            High
-          </option>
-
-          <option value="CRITICAL">
-            Critical
-          </option>
-        </select>
-
-        <select
-          value={sortBy}
-          onChange={(event) =>
-            handleSortByChange(
-              event.target.value as
-                | 'createdAt'
-                | 'dueDate'
-                | 'priority'
-                | 'title',
-            )
-          }
-        >
-          <option value="createdAt">
-            Created Date
-          </option>
-
-          <option value="dueDate">
-            Due Date
-          </option>
-
-          <option value="priority">
-            Priority
-          </option>
-
-          <option value="title">
-            Title
-          </option>
-        </select>
-
-        <select
-          value={sortOrder}
-          onChange={(event) =>
-            handleSortOrderChange(
-              event.target.value as
-                | 'asc'
-                | 'desc',
-            )
-          }
-        >
-          <option value="desc">
-            Descending
-          </option>
-
-          <option value="asc">
-            Ascending
-          </option>
-        </select>
+          <select
+            value={priority}
+            onChange={(e) => {
+              setPriority(e.target.value as TaskPriority | '');
+              setPage(1);
+            }}
+          >
+            <option value="">All Priorities</option>
+            <option value="LOW">Low</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="HIGH">High</option>
+            <option value="CRITICAL">Critical</option>
+          </select>
+        </div>
       </div>
 
       {loading ? (
         <div className="tasks-state-card">
-          <ListTodo size={28} />
-
+          <ListTodo size={32} />
           <h3>Loading tasks...</h3>
-
-          <p>
-            Fetching your latest workspace tasks.
-          </p>
+          <p>Fetching your latest workspace tasks.</p>
         </div>
       ) : error ? (
         <div className="tasks-state-card tasks-error-state">
           <X size={28} />
-
           <h3>Unable to load tasks</h3>
-
           <p>{error}</p>
         </div>
       ) : tasks.length === 0 ? (
         <div className="tasks-state-card">
           <CheckCircle2 size={30} />
-
           <h3>No tasks found</h3>
+          <p>Try changing your filters or create a new task.</p>
+        </div>
+      ) : viewMode === 'kanban' ? (
+        <div className="kanban-board">
+          {kanbanColumns.map((col) => {
+            const columnTasks = tasks.filter((t) => t.status === col.status);
+            return (
+              <div
+                key={col.status}
+                className="kanban-column"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => handleDrop(e, col.status)}
+              >
+                <div className="kanban-column-header">
+                  <span className="kanban-column-title">
+                    <span className={`task-status task-status-${col.status.toLowerCase()}`}></span>
+                    {col.label}
+                  </span>
+                  <span className="kanban-column-count">{columnTasks.length}</span>
+                </div>
 
-          <p>
-            Try changing your filters or create a
-            new task.
-          </p>
+                <div className="kanban-cards-list">
+                  {columnTasks.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '24px 0', fontSize: '13px', color: '#94a3b8' }}>
+                      Drag tasks here
+                    </div>
+                  ) : (
+                    columnTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        className="kanban-card"
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, task.id)}
+                      >
+                        <Link to={`/tasks/${task.id}`} className="kanban-card-title">
+                          {task.title}
+                        </Link>
+                        <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
+                          {task.project.name}
+                        </div>
+                        <div className="kanban-card-footer">
+                          <span className={`task-priority-text priority-text-${task.priority.toLowerCase()}`}>
+                            {task.priority}
+                          </span>
+                          <span>{task.assignees?.length ? `${task.assignees.length} assignees` : 'Unassigned'}</span>
+                        </div>
+
+                        <div className="kanban-card-actions">
+                          {col.status !== 'TODO' && (
+                            <button
+                              type="button"
+                              className="kanban-move-btn"
+                              onClick={() => {
+                                const prevStatus: Record<TaskStatus, TaskStatus> = {
+                                  TODO: 'TODO',
+                                  IN_PROGRESS: 'TODO',
+                                  IN_REVIEW: 'IN_PROGRESS',
+                                  DONE: 'IN_REVIEW',
+                                };
+                                handleStatusChange(task.id, prevStatus[col.status]);
+                              }}
+                            >
+                              ← Move
+                            </button>
+                          )}
+                          {col.status !== 'DONE' && (
+                            <button
+                              type="button"
+                              className="kanban-move-btn"
+                              onClick={() => {
+                                const nextStatus: Record<TaskStatus, TaskStatus> = {
+                                  TODO: 'IN_PROGRESS',
+                                  IN_PROGRESS: 'IN_REVIEW',
+                                  IN_REVIEW: 'DONE',
+                                  DONE: 'DONE',
+                                };
+                                handleStatusChange(task.id, nextStatus[col.status]);
+                              }}
+                            >
+                              Move →
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <>
@@ -876,9 +864,11 @@ export default function TasksPage() {
                     <UserRound size={14} />
 
                     <strong>
-                      {task.assignee
-                        ? task.assignee.name
-                        : 'Unassigned'}
+                      {task.assignees?.length > 0
+                        ? task.assignees.map((a) => a.user.name).join(', ')
+                        : task.assignee
+                          ? task.assignee.name
+                          : 'Unassigned'}
                     </strong>
                   </span>
 

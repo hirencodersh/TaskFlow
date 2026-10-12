@@ -14,6 +14,8 @@ import attachmentRoutes from './modules/attachments/attachment.routes.js';
 import labelRoutes from './modules/labels/label.routes.js';
 import activityLogRoutes from './modules/activity-logs/activity-log.routes.js';
 import adminRoutes from './modules/admin/admin.routes.js';
+import notificationRoutes from './modules/notifications/notification.routes.js';
+import analyticsRoutes from './modules/analytics/analytics.routes.js';
 
 import { setupSocket } from './lib/socket.js';
 import { setSocketInstance } from './lib/socket-instance.js';
@@ -119,6 +121,10 @@ app.use('/api/v1/labels', labelRoutes);
 app.use('/api/v1/activity-logs', activityLogRoutes);
 
 app.use('/api/v1/admin/users', adminRoutes);
+
+app.use('/api/v1/notifications', notificationRoutes);
+
+app.use('/api/v1/analytics', analyticsRoutes);
 
 /*
 |--------------------------------------------------------------------------

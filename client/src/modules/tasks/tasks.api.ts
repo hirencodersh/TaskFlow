@@ -16,6 +16,23 @@ export type TaskUser = {
   id: string;
   name: string;
   email: string;
+  role?: string;
+};
+
+export type TaskAssigneeItem = {
+  userId: string;
+  user: TaskUser;
+};
+
+export type TaskDependencyItem = {
+  taskId: string;
+  dependsOnTaskId: string;
+  dependsOn: {
+    id: string;
+    title: string;
+    status: TaskStatus;
+    priority?: TaskPriority;
+  };
 };
 
 export type TaskProject = {
@@ -44,8 +61,10 @@ export type Task = {
   updatedAt: string;
   project: TaskProject;
   assignee: TaskUser | null;
+  assignees: TaskAssigneeItem[];
+  dependencies: TaskDependencyItem[];
   createdBy: TaskUser;
-    labels: TaskLabel[];
+  labels: TaskLabel[];
 };
 
 export type TaskPagination = {
@@ -98,7 +117,8 @@ export type CreateTaskInput = {
   description?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
-  assigneeId?: string;
+  assigneeIds?: string[];
+  dependencyIds?: string[];
   dueDate?: string;
 };
 
@@ -141,7 +161,8 @@ export type UpdateTaskInput = {
   description?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
-  assigneeId?: string;
+  assigneeIds?: string[];
+  dependencyIds?: string[];
   dueDate?: string;
 };
 

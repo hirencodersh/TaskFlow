@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 
 import type { AuthenticatedRequest } from './auth.middleware.js';
 
-type UserRole = 'ADMIN' | 'PROJECT_MANAGER' | 'DEVELOPER';
+type UserRole = 'ADMIN' | 'PROJECT_MANAGER' | 'DEVELOPER' | 'DESIGNER' | 'QA';
 
 export function requireRole(...allowedRoles: UserRole[]) {
   return (

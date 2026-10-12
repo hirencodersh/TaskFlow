@@ -13,6 +13,8 @@ import {
   getOne,
   list,
   remove,
+  approve,
+  updatePermissions,
   updateRole,
   updateStatus,
 } from './admin.controller.js';
@@ -30,7 +32,11 @@ router.post('/', create);
 
 router.get('/:id', getOne);
 
+router.patch('/:id/approve', approve);
+
 router.patch('/:id/role', updateRole);
+
+router.patch('/:id/permissions', updatePermissions);
 
 router.patch('/:id/status', updateStatus);
 

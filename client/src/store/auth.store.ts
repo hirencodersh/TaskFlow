@@ -3,7 +3,9 @@ import { create } from 'zustand';
 export type UserRole =
   | 'ADMIN'
   | 'PROJECT_MANAGER'
-  | 'DEVELOPER';
+  | 'DEVELOPER'
+  | 'DESIGNER'
+  | 'QA';
 
 export type AuthUser = {
   id: string;

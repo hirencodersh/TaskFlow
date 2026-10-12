@@ -11,7 +11,9 @@ import type {
 type UserRole =
   | 'ADMIN'
   | 'PROJECT_MANAGER'
-  | 'DEVELOPER';
+  | 'DEVELOPER'
+  | 'DESIGNER'
+  | 'QA';
 
 async function getProjectAccess(
   userId: string,

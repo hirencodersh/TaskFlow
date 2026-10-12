@@ -6,12 +6,13 @@ import { z } from 'zod';
 import {
   zodResolver,
 } from '@hookform/resolvers/zod';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { login } from './auth.api';
 import {
   useAuthStore,
 } from '../../store/auth.store';
+import { connectSocket } from '../../lib/socket';
 
 const loginSchema = z.object({
   email: z
@@ -35,6 +36,7 @@ export default function LoginPage() {
     useAuthStore(
       (state) => state.setAuth,
     );
+  const navigate = useNavigate();
 
   const [serverError, setServerError] =
     useState('');
@@ -68,6 +70,10 @@ export default function LoginPage() {
         response.data.user,
         response.data.accessToken,
       );
+
+      connectSocket(response.data.accessToken);
+
+      navigate('/', { replace: true });
     } catch (error: unknown) {
       const message =
         (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -81,7 +87,11 @@ export default function LoginPage() {
     <main className="auth-page">
       <div className="auth-card">
         <div className="auth-header">
-          <h1>TaskFlow</h1>
+          <div className="landing-logo" style={{ justifyContent: 'center', marginBottom: '12px' }}>
+            <span className="landing-logo-icon"></span>
+            <span style={{ fontSize: '24px', fontWeight: 800 }}>TaskFlow</span>
+          </div>
+          <h1>Welcome back</h1>
 
           <p>
             Sign in to manage your projects
@@ -113,18 +123,10 @@ export default function LoginPage() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="password">
-              Password
-            </label>
-
-            <input
-              id="password"
-              type="password"
-              placeholder="Enter your password"
-              {...registerField('password')}
-            />
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label htmlFor="password">
+                Password
+              </label>
               <Link
                 to="/forgot-password"
                 style={{
@@ -137,6 +139,13 @@ export default function LoginPage() {
                 Forgot Password?
               </Link>
             </div>
+
+            <input
+              id="password"
+              type="password"
+              placeholder="Enter your password"
+              {...registerField('password')}
+            />
 
             {errors.password && (
               <p className="form-error">
@@ -160,6 +169,16 @@ export default function LoginPage() {
               : 'Sign In'}
           </button>
         </form>
+
+        <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '14px', color: 'var(--tf-muted, #64748b)' }}>
+          Don't have an account?{' '}
+          <Link
+            to="/register"
+            style={{ color: 'var(--tf-primary, #6366f1)', fontWeight: 600, textDecoration: 'none' }}
+          >
+            Create account
+          </Link>
+        </div>
       </div>
     </main>
   );

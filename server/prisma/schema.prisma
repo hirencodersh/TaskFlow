@@ -5,13 +5,14 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
 }
 
 enum UserRole {
   ADMIN
   PROJECT_MANAGER
   DEVELOPER
+  DESIGNER
+  QA
 }
 
 enum ProjectStatus {
@@ -42,20 +43,40 @@ model User {
   passwordHash String
   role         UserRole
   isActive     Boolean  @default(true)
+  permissions  Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   ownedProjects       Project[]            @relation("ProjectOwner")
   projectMemberships  ProjectMember[]
   assignedTasks       Task[]               @relation("TaskAssignee")
+  taskAssignments     TaskAssignee[]
   createdTasks        Task[]               @relation("TaskCreator")
   comments            Comment[]
   attachments         Attachment[]
   activityLogs        ActivityLog[]
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
+  notifications       Notification[]
 
+  @@index([email])
   @@index([role])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
   @@index([createdAt])
 }
 
@@ -109,9 +130,12 @@ model Task {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignee     User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  createdBy    User          @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee     User?            @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assignees    TaskAssignee[]
+  dependencies TaskDependency[] @relation("TaskDependencies")
+  blockers     TaskDependency[] @relation("TaskBlockers")
+  createdBy    User             @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
   labels       TaskLabel[]
   comments     Comment[]
   attachments  Attachment[]
@@ -124,6 +148,30 @@ model Task {
   @@index([priority])
   @@index([dueDate])
   @@index([createdAt])
+}
+
+model TaskAssignee {
+  taskId String
+  userId String
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([taskId])
+  @@index([userId])
+}
+
+model TaskDependency {
+  taskId          String
+  dependsOnTaskId String
+
+  task      Task @relation("TaskDependencies", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn Task @relation("TaskBlockers", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, dependsOnTaskId])
+  @@index([taskId])
+  @@index([dependsOnTaskId])
 }
 
 model Label {

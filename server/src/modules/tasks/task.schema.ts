@@ -24,6 +24,8 @@ export const createTaskSchema = z.object({
     .default('MEDIUM'),
 
   assigneeId: z.string().min(1).optional(),
+  assigneeIds: z.array(z.string()).optional(),
+  dependencyIds: z.array(z.string()).optional(),
 
   dueDate: z.coerce.date().optional(),
 });
@@ -58,14 +60,15 @@ export const updateTaskSchema = z
       .min(1, 'Assignee ID is required')
       .optional(),
 
+    assigneeIds: z.array(z.string()).optional(),
+    dependencyIds: z.array(z.string()).optional(),
+
     dueDate: z.coerce.date().optional(),
   })
   .refine(
     (data) => Object.keys(data).length > 0,
     'At least one field is required',
   );
-
-
 
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 
@@ -89,7 +92,7 @@ export const listTaskQuerySchema = z.object({
     .int()
     .positive()
     .max(100)
-    .default(10),
+    .default(50),
 
   sortBy: z
     .enum(['createdAt', 'dueDate', 'priority', 'title'])

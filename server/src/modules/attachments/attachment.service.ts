@@ -11,7 +11,9 @@ import { emitProjectEvent } from '../../lib/socket-events.js';
 type UserRole =
   | 'ADMIN'
   | 'PROJECT_MANAGER'
-  | 'DEVELOPER';
+  | 'DEVELOPER'
+  | 'DESIGNER'
+  | 'QA';
 
 export async function getTaskForAttachment(
   userId: string,

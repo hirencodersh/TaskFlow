@@ -6,7 +6,9 @@ import { emitProjectEvent } from '../../lib/socket-events.js';
 type UserRole =
   | 'ADMIN'
   | 'PROJECT_MANAGER'
-  | 'DEVELOPER';
+  | 'DEVELOPER'
+  | 'DESIGNER'
+  | 'QA';
 
 async function getTaskAccess(
   userId: string,

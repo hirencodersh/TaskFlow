@@ -21,12 +21,14 @@ export async function registerUser(input: RegisterInput) {
 
   const passwordHash = await hashPassword(input.password);
 
+  // New registrations are PENDING (isActive: false) and assigned DEVELOPER role by default (never ADMIN)
   const user = await prisma.user.create({
     data: {
       name: input.name,
       email: input.email.toLowerCase(),
       passwordHash,
       role: 'DEVELOPER',
+      isActive: false,
     },
     select: {
       id: true,
@@ -54,7 +56,7 @@ export async function loginUser(input: LoginInput) {
   }
 
   if (!user.isActive) {
-    throw new Error('Account is inactive');
+    throw new Error('Account is pending administrator approval or inactive');
   }
 
   const passwordMatches = await comparePassword(
@@ -143,7 +145,7 @@ export async function refreshAccessToken(refreshToken: string) {
       });
 
       if (!user || !user.isActive) {
-        throw new Error('Account is inactive');
+        throw new Error('Account is pending administrator approval or inactive');
       }
 
       const accessToken = generateAccessToken({
@@ -209,7 +211,7 @@ export async function getCurrentUser(userId: string) {
   }
 
   if (!user.isActive) {
-    throw new Error('Account is inactive');
+    throw new Error('Account is pending administrator approval or inactive');
   }
 
   return user;

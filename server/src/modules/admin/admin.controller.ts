@@ -5,6 +5,7 @@ import type { AuthenticatedRequest } from '../auth/auth.middleware.js';
 import {
   createUserSchema,
   listUsersQuerySchema,
+  updateUserPermissionsSchema,
   updateUserRoleSchema,
   updateUserStatusSchema,
 } from './admin.schema.js';
@@ -14,6 +15,8 @@ import {
   getUserById,
   getUsers,
   removeUser,
+  approveUser,
+  updateUserPermissions,
   updateUserRole,
   updateUserStatus,
 } from './admin.service.js';
@@ -35,7 +38,9 @@ export async function list(
   }
 
   try {
-    const users = await getUsers(result.data);
+    const users = await getUsers(
+      result.data,
+    );
 
     return res.status(200).json({
       success: true,
@@ -121,6 +126,114 @@ export async function updateRole(
     return res.status(200).json({
       success: true,
       message: 'User role updated successfully',
+      data: user,
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'User not found'
+    ) {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+    });
+  }
+}
+
+export async function approve(
+  req: Request,
+  res: Response,
+) {
+  const userId = req.params.id;
+
+  if (!userId) {
+    return res.status(400).json({
+      success: false,
+      message: 'User ID is required',
+    });
+  }
+
+  const result = updateUserRoleSchema.safeParse(
+    req.body,
+  );
+
+  if (!result.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: result.error.issues,
+    });
+  }
+
+  try {
+    const user = await approveUser(
+      userId,
+      result.data.role,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'User approved and role assigned successfully',
+      data: { user },
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'User not found'
+    ) {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+    });
+  }
+}
+
+export async function updatePermissions(
+  req: Request,
+  res: Response,
+) {
+  const userId = req.params.id;
+
+  if (!userId) {
+    return res.status(400).json({
+      success: false,
+      message: 'User ID is required',
+    });
+  }
+
+  const result = updateUserPermissionsSchema.safeParse(
+    req.body,
+  );
+
+  if (!result.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: result.error.issues,
+    });
+  }
+
+  try {
+    const user = await updateUserPermissions(
+      userId,
+      result.data,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'User permissions updated successfully',
       data: user,
     });
   } catch (error) {

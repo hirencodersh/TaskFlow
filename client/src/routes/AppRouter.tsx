@@ -5,7 +5,9 @@ import {
   useParams,
 } from 'react-router-dom';
 
+import LandingPage from '../modules/landing/LandingPage';
 import LoginPage from '../modules/auth/LoginPage';
+import RegisterPage from '../modules/auth/RegisterPage';
 import ForgotPasswordPage from '../modules/auth/ForgotPasswordPage';
 import ResetPasswordPage from '../modules/auth/ResetPasswordPage';
 import DashboardPage from '../modules/dashboard/DashboardPage';
@@ -50,6 +52,17 @@ export default function AppRouter() {
       />
 
       <Route
+        path="/register"
+        element={
+          user ? (
+            <Navigate to="/" replace />
+          ) : (
+            <RegisterPage />
+          )
+        }
+      />
+
+      <Route
         path="/forgot-password"
         element={
           user ? (
@@ -79,10 +92,18 @@ export default function AppRouter() {
               <DashboardPage />
             </AppLayout>
           ) : (
-            <Navigate
-              to="/login"
-              replace
-            />
+            <LandingPage />
+          )
+        }
+      />
+
+      <Route
+        path="/dashboard"
+        element={
+          user ? (
+            <Navigate to="/" replace />
+          ) : (
+            <Navigate to="/login" replace />
           )
         }
       />
@@ -168,7 +189,7 @@ export default function AppRouter() {
         path="*"
         element={
           <Navigate
-            to={user ? '/' : '/login'}
+            to={user ? '/' : '/'}
             replace
           />
         }

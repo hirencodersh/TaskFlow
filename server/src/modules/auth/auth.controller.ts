@@ -83,7 +83,8 @@ export async function login(req: Request, res: Response) {
         if (
             error instanceof Error &&
             (error.message === 'Invalid email or password' ||
-                error.message === 'Account is inactive')
+                error.message === 'Account is inactive' ||
+                error.message === 'Account is pending administrator approval or inactive')
         ) {
             return res.status(401).json({
                 success: false,

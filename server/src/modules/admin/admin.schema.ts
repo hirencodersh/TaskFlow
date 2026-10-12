@@ -8,6 +8,8 @@ export const listUsersQuerySchema = z.object({
       'ADMIN',
       'PROJECT_MANAGER',
       'DEVELOPER',
+      'DESIGNER',
+      'QA',
     ])
     .optional(),
 
@@ -39,11 +41,21 @@ export const updateUserRoleSchema = z.object({
     'ADMIN',
     'PROJECT_MANAGER',
     'DEVELOPER',
+    'DESIGNER',
+    'QA',
   ]),
 });
 
 export type UpdateUserRoleInput = z.infer<
   typeof updateUserRoleSchema
+>;
+
+export const updateUserPermissionsSchema = z.object({
+  permissions: z.record(z.string(), z.boolean()),
+});
+
+export type UpdateUserPermissionsInput = z.infer<
+  typeof updateUserPermissionsSchema
 >;
 
 export const updateUserStatusSchema = z.object({
@@ -63,7 +75,13 @@ export const createUserSchema = z.object({
   password: z
     .string()
     .min(8, 'Password must be at least 8 characters'),
-  role: z.enum(['PROJECT_MANAGER', 'DEVELOPER']),
+  role: z.enum([
+    'ADMIN',
+    'PROJECT_MANAGER',
+    'DEVELOPER',
+    'DESIGNER',
+    'QA',
+  ]),
 });
 
 export type CreateUserInput = z.infer<

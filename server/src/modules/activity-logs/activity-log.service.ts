@@ -5,7 +5,9 @@ import { getSocketInstance } from '../../lib/socket-instance.js';
 type UserRole =
   | 'ADMIN'
   | 'PROJECT_MANAGER'
-  | 'DEVELOPER';
+  | 'DEVELOPER'
+  | 'DESIGNER'
+  | 'QA';
 
 type CreateActivityLogInput = {
   projectId: string;

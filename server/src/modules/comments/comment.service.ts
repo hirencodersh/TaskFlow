@@ -2,13 +2,19 @@ import { prisma } from '../../lib/prisma.js';
 import { getSocketInstance } from '../../lib/socket-instance.js';
 import { emitProjectEvent } from '../../lib/socket-events.js';
 import { createActivityLog } from '../activity-logs/activity-log.service.js';
+import { createNotification } from '../notifications/notification.service.js';
 
 import type {
   CreateCommentInput,
   UpdateCommentInput,
 } from './comment.schema.js';
 
-type UserRole = 'ADMIN' | 'PROJECT_MANAGER' | 'DEVELOPER';
+type UserRole =
+  | 'ADMIN'
+  | 'PROJECT_MANAGER'
+  | 'DEVELOPER'
+  | 'DESIGNER'
+  | 'QA';
 
 export async function createComment(
   userId: string,
@@ -102,6 +108,29 @@ export async function createComment(
     'comment:created',
     comment,
   );
+
+  const taskDetails = await prisma.task.findUnique({
+    where: { id: taskId },
+    include: {
+      assignees: { select: { userId: true } },
+    },
+  });
+
+  const recipientIds = new Set<string>();
+  if (task.assignee?.id) recipientIds.add(task.assignee.id);
+  if (task.project.ownerId) recipientIds.add(task.project.ownerId);
+  taskDetails?.assignees?.forEach((a) => recipientIds.add(a.userId));
+  recipientIds.delete(userId);
+
+  for (const recipientId of recipientIds) {
+    await createNotification({
+      userId: recipientId,
+      title: 'New Comment',
+      message: `${comment.author.name} commented on "${taskDetails?.title || 'Task'}"`,
+      type: 'COMMENT',
+      link: `/tasks/${taskId}`,
+    });
+  }
 
   return comment;
 }

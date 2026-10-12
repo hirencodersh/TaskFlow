@@ -11,16 +11,18 @@ import type {
 type UserRole =
   | 'ADMIN'
   | 'PROJECT_MANAGER'
-  | 'DEVELOPER';
+  | 'DEVELOPER'
+  | 'DESIGNER'
+  | 'QA';
 
 export async function createProject(
   userId: string,
   userRole: UserRole,
   input: CreateProjectInput,
 ) {
-  if (userRole === 'DEVELOPER') {
+  if (['DEVELOPER', 'DESIGNER', 'QA'].includes(userRole)) {
     throw new Error(
-      'Developers cannot create projects',
+      'Developers, designers, and QA cannot create projects',
     );
   }
 

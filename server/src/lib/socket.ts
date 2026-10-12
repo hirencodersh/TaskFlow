@@ -50,10 +50,12 @@ export function setupSocket(io: Server) {
   });
 
   // Socket connection
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     logger.info(
       `Socket connected: ${socket.id} user=${socket.data.userId}`,
     );
+
+    await socket.join(`user:${socket.data.userId}`);
 
     // Join project room
     socket.on('join-project', async (projectId: string) => {

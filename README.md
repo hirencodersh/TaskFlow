@@ -1,14 +1,14 @@
 # TaskFlow
 
-TaskFlow is a modern, full-stack, real-time project management and task tracking application built as a monorepo containing a **React (Vite) client** and a **Node.js (Express) API**.
+TaskFlow is a modern, full-stack, real-time project management and task tracking platform built as an npm monorepo containing a **React 19 (Vite) client** and a **Node.js (Express) API**.
 
 ---
 
-## Architecture & Core Concepts
+## 🏗️ Architecture & Core Concepts
 
 ### 1. Project vs. Task
 - **Project**: A high-level organizational container representing an initiative, client engagement, or product release. Projects encapsulate timelines, statuses, member rosters, labels, and an associated set of tasks.
-- **Task**: A granular unit of work belonging to a single Project. Tasks track specific deliverables, steps, or issues with independent priorities, due dates, assignees, comments, and file attachments.
+- **Task**: A granular unit of work belonging to a single Project. Tasks track deliverables with independent priorities, due dates, multiple assignees, comments, file attachments, and task dependencies.
 
 ### 2. Status Flows
 - **Project Statuses**:
@@ -16,51 +16,56 @@ TaskFlow is a modern, full-stack, real-time project management and task tracking
 - **Task Statuses**:
   `TODO` → `IN_PROGRESS` → `IN_REVIEW` → `DONE`
 
-### 3. Project Membership vs. Task Assignment
-- **Project Member**: A user granted access to a project's workspace (tasks, comments, attachments, activity logs). Managed by the project owner or administrator.
-- **Task Assignee**: A project member designated as responsible for executing a specific task.
+### 3. Roles & Permissions (RBAC)
+TaskFlow enforces strict role-based access control across `ADMIN`, `PROJECT_MANAGER`, `DEVELOPER`, `DESIGNER`, and `QA` roles, supplemented by per-user permission override toggles.
+
+| Role | User & Team Management | Projects | Tasks & Kanban | Comments & Attachments |
+| :--- | :--- | :--- | :--- | :--- |
+| **ADMIN** | Full management (create users, toggle status, change roles, permission overrides) | Create, view, update, delete all projects | Create, view, update, delete all tasks & dependencies | Full access |
+| **PROJECT_MANAGER** | View users, manage team members within owned projects | Create projects (owner), update/delete owned projects | Create, view, update, delete tasks in owned projects | Full access |
+| **DEVELOPER** | View team members | View allowed projects (membership-based) | View assigned tasks, update task status (except `DONE`) | Add comments & upload attachments |
+| **DESIGNER** | View team members | View allowed projects (membership-based) | View assigned tasks, update task status (except `DONE`) | Add comments & upload design attachments |
+| **QA** | View team members | View allowed projects (membership-based) | View assigned tasks, update task status (including `DONE` / testing review) | Add comments & upload test attachments |
 
 ---
 
-## Role-Based Access Control (RBAC)
+## ✨ Key Features & Phases
 
-TaskFlow implements robust, strict role enforcement across both the frontend UI and the backend API (`401 Unauthorized` / `403 Forbidden` responses for unauthorized requests):
-
-| Role | Users & Admin | Projects | Project Members | Tasks | Task Status (Assigned) | Comments & Attachments |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **ADMIN** | Full management (create users, toggle status, change roles) | Create, view, update, delete all | Manage members on any project | Create, view, update, delete all | Any task | Full access |
-| **PROJECT_MANAGER** | View users | Create projects (becomes owner), update/delete owned projects | Add/remove members on owned projects | Create and manage tasks on owned projects | Tasks in owned projects | Full access |
-| **DEVELOPER** | View users | View allowed projects (membership-based) | View project members | View assigned / project tasks | **Update status only** on assigned tasks | Create comments and upload attachments on accessible tasks |
-
----
-
-## Complete E2E User Flow
-
-1. **Administrator Setup**:
-   - Admin logs into the system.
-   - Admin navigates to Admin Users and creates a new user with the `PROJECT_MANAGER` role.
-2. **Project & Task Creation**:
-   - Project Manager logs in, creates a new **Project** (status: `PLANNING` or `ACTIVE`), and adds a **Developer** to the project member list.
-   - PM creates a **Task** within the project, setting priority and assigning it to the Developer.
-3. **Task Execution & Collaboration**:
-   - Developer logs in, views the assigned task in their dashboard or project view.
-   - Developer updates task status: `TODO` → `IN_PROGRESS` → `IN_REVIEW` → `DONE`.
-   - Developer posts a comment and uploads a supporting file attachment.
-   - Real-time updates propagate instantly to all active project members via Socket.IO.
+1. **Product Presentation (Phase 1)**:
+   - Professional SaaS landing page at `/` with hero, features, how-it-works, CTA, and responsive navigation.
+   - Modern Login and Registration flows with instant session initialization.
+2. **Team & Access (Phase 2)**:
+   - Expanded roles (`ADMIN`, `PROJECT_MANAGER`, `DEVELOPER`, `DESIGNER`, `QA`).
+   - Admin Users management hiding the logged-in admin from listings.
+   - User Details pages with profile info, task statistics, project involvement, and per-user permission overrides.
+3. **Task Management (Phase 3)**:
+   - Interactive Kanban Board with 4 columns (`TODO`, `IN_PROGRESS`, `IN_REVIEW`, `DONE`) and drag-and-drop/quick-move status transitions.
+   - Multiple assignees per task with role and project membership validation.
+   - Task dependencies ("blocked by" / "blocking") with circular dependency prevention and blocked task validation (preventing tasks from starting if required blockers are incomplete).
+4. **Communication & Notifications (Phase 4)**:
+   - Persistent in-app notification center in the navbar with unread badge counter.
+   - Automated real-time notifications for task assignments, status changes, comments, and dependency events via Socket.IO user rooms.
+   - Notification history, unread filtering, mark-as-read, and mark-all-as-read.
+5. **Advanced Dashboard & Analytics (Phase 5)**:
+   - Role-specific dashboards (Admin, PM, Developer, Designer, QA) calculating real-time metrics from PostgreSQL.
+   - Team workload charts, project progress, overdue task tracking, upcoming deadlines, and project filters.
+6. **Final Polish & Documentation (Phase 6)**:
+   - Comprehensive end-to-end polish, responsive layouts across desktop/tablet/mobile, and robust error/loading/empty states.
 
 ---
 
-## Real-Time Behavior (Socket.IO)
+## ⚡ Real-Time Collaboration (Socket.IO)
 
-TaskFlow uses WebSockets (`socket.io` and `socket.io-client`) for real-time collaboration. When users view a project, their client joins a secure project room (`project:${projectId}`). The following events update clients in real-time without page reloads:
-- `task:created` / `task:updated` / `task:deleted`
-- `comment:created`
-- `attachment:uploaded`
+TaskFlow uses WebSockets for real-time synchronization. Clients join secure project rooms (`project:${projectId}`) and personal user rooms (`user:${userId}`) to receive instant updates for:
+- `task:created`, `task:updated`, `task:deleted`
+- `comment:created`, `comment:updated`, `comment:deleted`
+- `attachment:uploaded`, `attachment:deleted`
+- `notification:new`
 - `activity-log-created`
 
 ---
 
-## Monorepo Structure
+## 📁 Monorepo Structure
 
 ```
 TaskFlow/
@@ -73,15 +78,33 @@ TaskFlow/
 
 ---
 
-## Prerequisites
+## ⚙️ Environment Variables
 
-- Node.js >= 20
-- npm >= 10 (with workspace support)
-- PostgreSQL database
+### 1. Server (`server/.env`)
+```env
+PORT=3001
+NODE_ENV=development
+CLIENT_ORIGIN=http://localhost:5173
+DATABASE_URL="postgresql://postgres:password@localhost:5432/taskflow_db?schema=public"
+JWT_ACCESS_SECRET=your_access_secret_key_here
+JWT_REFRESH_SECRET=your_refresh_secret_key_here
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=user@example.com
+SMTP_PASS=password
+```
+
+### 2. Client (`client/.env`)
+```env
+VITE_API_URL=http://localhost:3001/api/v1
+```
 
 ---
 
-## Setup & Running
+## 🚀 Local Setup & Installation
 
 ### 1. Install Dependencies
 ```bash
@@ -89,17 +112,17 @@ npm install
 ```
 
 ### 2. Configure Environment Variables
-Copy example environment files and populate database credentials and secrets:
-- `client/.env.example` → `client/.env`
-- `server/.env.example` → `server/.env`
+Copy and populate `.env.example` to `.env` in both `client/` and `server/`.
 
 ### 3. Database Migration & Prisma Setup
+Ensure PostgreSQL is running, then execute:
 ```bash
-npm run prisma:generate --workspace=server
+cd server
+npx prisma migrate dev
+npx prisma generate
 ```
 
 ### 4. Run Development Servers
-
 - **Start API Server** (Express, default `http://localhost:3001`):
   ```bash
   npm run dev:server
@@ -111,7 +134,7 @@ npm run prisma:generate --workspace=server
 
 ---
 
-## Scripts & Verification
+## 🔍 Scripts & Verification
 
 | Command | Description |
 | --- | --- |
@@ -120,3 +143,11 @@ npm run prisma:generate --workspace=server
 | `npm run build` | Build both client and server |
 | `npm run lint` | Run ESLint across monorepo |
 | `npm run format` | Format code with Prettier |
+
+---
+
+## 🛠️ Troubleshooting
+
+- **Database Connection Error**: Ensure PostgreSQL service is active and `DATABASE_URL` credentials are correct in `server/.env`.
+- **WebSocket Connection Failure**: Verify `VITE_API_URL` in `client/.env` matches the Express server URL and CORS `CLIENT_ORIGIN` matches the client app URL.
+- **Cloudinary Upload Issues**: Ensure Cloudinary API credentials (`CLOUDINARY_CLOUD_NAME`, `KEY`, `SECRET`) are properly configured in `server/.env`.
