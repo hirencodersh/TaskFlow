@@ -44,7 +44,7 @@ export default function AdminUsersPage() {
     useState(false);
 
   const [approvingUserId, setApprovingUserId] = useState<string | null>(null);
-  const [approveRole, setApproveRole] = useState<UserRole>('DEVELOPER');
+  const [approveRole, setApproveRole] = useState<UserRole>('' as UserRole);
 
   const [createName, setCreateName] = useState('');
   const [createEmail, setCreateEmail] = useState('');
@@ -139,6 +139,19 @@ export default function AdminUsersPage() {
             : user,
         ),
       );
+
+      if (selectedUser?.id === userId) {
+        setSelectedUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                isActive: response.data.user.isActive,
+                role: response.data.user.role,
+              }
+            : null,
+        );
+      }
+
       setApprovingUserId(null);
     } catch (error) {
       console.error('Failed to approve user:', error);
@@ -406,6 +419,7 @@ export default function AdminUsersPage() {
             </div>
 
             {users
+              .filter((user) => user.role !== 'ADMIN')
               .slice()
               .sort((a, b) => {
                 if (a.isActive !== b.isActive) {
@@ -490,7 +504,10 @@ export default function AdminUsersPage() {
                         type="button"
                         className="admin-status-action"
                         style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }}
-                        onClick={() => setApprovingUserId(user.id)}
+                        onClick={() => {
+                          setApprovingUserId(user.id);
+                          setApproveRole(user.role || 'DEVELOPER');
+                        }}
                       >
                         <CheckCheck size={14} /> Accept
                       </button>
@@ -527,10 +544,6 @@ export default function AdminUsersPage() {
                         }
                         className="admin-role-select"
                       >
-                        <option value="ADMIN">
-                          Admin
-                        </option>
-
                         <option value="PROJECT_MANAGER">
                           Project Manager
                         </option>
@@ -623,7 +636,6 @@ export default function AdminUsersPage() {
                 <option value="DESIGNER">Designer</option>
                 <option value="QA">QA</option>
                 <option value="PROJECT_MANAGER">Project Manager</option>
-                <option value="ADMIN">Admin</option>
               </select>
             </div>
             <div className="add-member-modal-actions">
@@ -860,9 +872,6 @@ export default function AdminUsersPage() {
                   </option>
                   <option value="PROJECT_MANAGER">
                     Project Manager
-                  </option>
-                  <option value="ADMIN">
-                    Admin
                   </option>
                 </select>
               </div>

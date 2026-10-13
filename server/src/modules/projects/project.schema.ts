@@ -14,8 +14,7 @@ export const createProjectSchema = z.object({
     .optional(),
 
   status: z
-    .enum(['PLANNING', 'ACTIVE', 'COMPLETED', 'ARCHIVED'])
-    .default('PLANNING'),
+    .enum(['PLANNING', 'ACTIVE', 'ON_HOLD', 'COMPLETED', 'CANCELLED']),
 
   startDate: z.coerce.date().optional(),
 

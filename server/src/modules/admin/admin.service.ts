@@ -172,6 +172,10 @@ export async function updateUserRole(
   targetUserId: string,
   input: UpdateUserRoleInput,
 ) {
+  if (input.role === ('ADMIN' as UserRole)) {
+    throw new Error('Cannot assign ADMIN role');
+  }
+
   const user = await prisma.user.findUnique({
     where: {
       id: targetUserId,
@@ -180,6 +184,10 @@ export async function updateUserRole(
 
   if (!user) {
     throw new Error('User not found');
+  }
+
+  if (user.role === 'ADMIN') {
+    throw new Error('Cannot modify ADMIN user role');
   }
 
   return prisma.user.update({
@@ -205,6 +213,10 @@ export async function approveUser(
   targetUserId: string,
   role: UserRole,
 ) {
+  if (role === ('ADMIN' as UserRole)) {
+    throw new Error('Cannot approve user as ADMIN');
+  }
+
   const user = await prisma.user.findUnique({
     where: {
       id: targetUserId,
@@ -213,6 +225,10 @@ export async function approveUser(
 
   if (!user) {
     throw new Error('User not found');
+  }
+
+  if (user.role === 'ADMIN') {
+    throw new Error('Cannot modify ADMIN user');
   }
 
   return prisma.user.update({

@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 
 import type { AuthenticatedRequest } from '../auth/auth.middleware.js';
+import { logger } from '../../lib/logger.js';
 
 import {
   createTask,
@@ -69,13 +70,21 @@ export async function create(req: Request, res: Response) {
       });
     }
 
-    if (error.message === 'Assignee must be a project member') {
+    if (
+      error.message === 'Assignee must be a project member' ||
+      error.message.includes('must be a project member') ||
+      error.message.includes('must be an active DESIGNER') ||
+      error.message.includes('must be an active DEVELOPER') ||
+      error.message.includes('must be an active QA') ||
+      error.message.includes('Task due date cannot be')
+    ) {
       return res.status(400).json({
         success: false,
         message: error.message,
       });
     }
 
+    logger.error(error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error',
@@ -225,7 +234,14 @@ export async function update(
       });
     }
 
-    if (error.message === 'Assignee must be a project member') {
+    if (
+      error.message === 'Assignee must be a project member' ||
+      error.message.includes('must be a project member') ||
+      error.message.includes('must be an active DESIGNER') ||
+      error.message.includes('must be an active DEVELOPER') ||
+      error.message.includes('must be an active QA') ||
+      error.message.includes('Task due date cannot be')
+    ) {
       return res.status(400).json({
         success: false,
         message: error.message,

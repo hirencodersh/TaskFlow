@@ -3,8 +3,9 @@ import api from '../../lib/api';
 export type ProjectStatus =
   | 'PLANNING'
   | 'ACTIVE'
+  | 'ON_HOLD'
   | 'COMPLETED'
-  | 'ARCHIVED';
+  | 'CANCELLED';
 
 export type Project = {
   id: string;

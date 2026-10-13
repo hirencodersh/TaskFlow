@@ -19,6 +19,18 @@ type UserRole =
 
 type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE';
 
+async function validateTaskDueDate(project: { startDate: Date | null; dueDate: Date | null }, dueDate: Date | undefined) {
+  if (!dueDate) return;
+
+  if (project.startDate && new Date(dueDate).getTime() < new Date(project.startDate).getTime()) {
+    throw new Error('Task due date cannot be earlier than the project start date');
+  }
+
+  if (project.dueDate && new Date(dueDate).getTime() > new Date(project.dueDate).getTime()) {
+    throw new Error('Task due date cannot be later than the project due date');
+  }
+}
+
 async function checkCircularDependency(taskId: string, dependencyIds: string[]) {
   if (dependencyIds.includes(taskId)) {
     return true;
@@ -95,6 +107,128 @@ export async function createTask(
     throw new Error(
       'Only the project owner or admin can create tasks',
     );
+  }
+
+  await validateTaskDueDate(project, input.dueDate);
+
+  // Handle Pipeline creation (Design -> Development -> QA)
+  if (input.isPipeline) {
+    const designAssigneeId = input.designAssigneeId;
+    const devAssigneeId = input.devAssigneeId;
+    const qaAssigneeId = input.qaAssigneeId;
+
+    const pipelineAssignees = [
+      { id: designAssigneeId, expectedRole: 'DESIGNER', name: 'Design' },
+      { id: devAssigneeId, expectedRole: 'DEVELOPER', name: 'Development' },
+      { id: qaAssigneeId, expectedRole: 'QA', name: 'QA' },
+    ];
+
+    for (const pa of pipelineAssignees) {
+      if (pa.id) {
+        const member = project.members.find((m) => m.userId === pa.id);
+        if (!member) {
+          throw new Error(`${pa.name} assignee must be a project member`);
+        }
+        const userObj = await prisma.user.findUnique({
+          where: { id: pa.id },
+          select: { role: true, isActive: true },
+        });
+        if (!userObj || !userObj.isActive || userObj.role !== pa.expectedRole) {
+          throw new Error(`${pa.name} assignee must be an active ${pa.expectedRole}`);
+        }
+      }
+    }
+
+    return prisma.$transaction(async (tx) => {
+      const designTask = await tx.task.create({
+        data: {
+          projectId: input.projectId,
+          title: `[Design] ${input.title}`,
+          description: input.description,
+          status: 'TODO',
+          priority: input.priority,
+          assigneeId: designAssigneeId || null,
+          dueDate: input.dueDate,
+          createdById: userId,
+          assignees: designAssigneeId
+            ? { create: { userId: designAssigneeId } }
+            : undefined,
+        },
+      });
+
+      const devTask = await tx.task.create({
+        data: {
+          projectId: input.projectId,
+          title: `[Development] ${input.title}`,
+          description: input.description,
+          status: 'TODO',
+          priority: input.priority,
+          assigneeId: devAssigneeId || null,
+          dueDate: input.dueDate,
+          createdById: userId,
+          assignees: devAssigneeId
+            ? { create: { userId: devAssigneeId } }
+            : undefined,
+        },
+      });
+
+      const qaTask = await tx.task.create({
+        data: {
+          projectId: input.projectId,
+          title: `[QA] ${input.title}`,
+          description: input.description,
+          status: 'TODO',
+          priority: input.priority,
+          assigneeId: qaAssigneeId || null,
+          dueDate: input.dueDate,
+          createdById: userId,
+          assignees: qaAssigneeId
+            ? { create: { userId: qaAssigneeId } }
+            : undefined,
+        },
+      });
+
+      // Link Dev depends on Design
+      await tx.taskDependency.create({
+        data: {
+          taskId: devTask.id,
+          dependsOnTaskId: designTask.id,
+        },
+      });
+
+      // Link QA depends on Dev
+      await tx.taskDependency.create({
+        data: {
+          taskId: qaTask.id,
+          dependsOnTaskId: devTask.id,
+        },
+      });
+
+      await createActivityLog({
+        projectId: project.id,
+        actorId: userId,
+        action: 'TASK_PIPELINE_CREATED',
+        metadata: {
+          pipelineTitle: input.title,
+          designTaskId: designTask.id,
+          devTaskId: devTask.id,
+          qaTaskId: qaTask.id,
+        },
+      });
+
+      const io = getSocketInstance();
+      emitProjectEvent(io, project.id, 'task:pipeline-created', {
+        designTask,
+        devTask,
+        qaTask,
+      });
+
+      return {
+        designTask,
+        devTask,
+        qaTask,
+      };
+    });
   }
 
   const assigneeIds = input.assigneeIds ?? (input.assigneeId ? [input.assigneeId] : []);
@@ -341,6 +475,65 @@ export async function updateTask(
     await validateTaskDependencies(taskId, input.status);
   }
 
+  // Handle QA Return to Developer action
+  if (input.returnToDeveloper && input.returnReason && input.targetDevTaskId) {
+    if (userRole !== 'ADMIN' && userRole !== 'QA') {
+      throw new Error('Only QA or Admin can return tasks to developers');
+    }
+
+    const devTask = await prisma.task.findUnique({
+      where: { id: input.targetDevTaskId },
+      include: { assignee: true, assignees: true },
+    });
+
+    if (!devTask) {
+      throw new Error('Target development task not found');
+    }
+
+    // Reopen development task
+    await prisma.task.update({
+      where: { id: input.targetDevTaskId },
+      data: { status: 'IN_PROGRESS' },
+    });
+
+    // Create comment / log reason on dev task
+    await prisma.comment.create({
+      data: {
+        taskId: input.targetDevTaskId,
+        authorId: userId,
+        content: `[QA Returned]: ${input.returnReason}`,
+      },
+    });
+
+    await createActivityLog({
+      projectId: task.projectId,
+      taskId: task.id,
+      actorId: userId,
+      action: 'TASK_RETURNED_TO_DEVELOPER',
+      metadata: {
+        reason: input.returnReason,
+        devTaskId: input.targetDevTaskId,
+      },
+    });
+
+    // Notify developer if assigned
+    const devAssigneeId = devTask.assigneeId || devTask.assignees[0]?.userId;
+    if (devAssigneeId) {
+      const { createNotification } = await import('../notifications/notification.service.js');
+      await createNotification({
+        userId: devAssigneeId,
+        title: 'Task Returned by QA',
+        message: `Task "${devTask.title}" was returned by QA. Reason: ${input.returnReason}`,
+        type: 'TASK_RETURNED',
+        link: `/tasks/${input.targetDevTaskId}`,
+      });
+    }
+  }
+
+  if (input.dueDate) {
+    await validateTaskDueDate(task.project, input.dueDate);
+  }
+
   if (input.assigneeIds || input.assigneeId) {
     const assigneeIds = input.assigneeIds ?? (input.assigneeId ? [input.assigneeId] : []);
     for (const assigneeId of assigneeIds) {
@@ -406,6 +599,8 @@ export async function updateTask(
 
   const { assigneeIds: _, dependencyIds: __, ...restInput } = input;
 
+  const previousStatus = task.status;
+
   const updatedTask = await prisma.task.update({
     where: {
       id: taskId,
@@ -430,6 +625,109 @@ export async function updateTask(
       },
     },
   });
+
+  // If task just transitioned to DONE, notify dependent tasks / next stage assignees
+  if (previousStatus !== 'DONE' && updatedTask.status === 'DONE') {
+    const dependentTaskRelations = await prisma.taskDependency.findMany({
+      where: { dependsOnTaskId: taskId },
+      include: {
+        task: {
+          include: {
+            assignee: true,
+            assignees: true,
+          },
+        },
+      },
+    });
+
+    for (const depRel of dependentTaskRelations) {
+      const nextTask = depRel.task;
+      const nextAssigneeId = nextTask.assigneeId || nextTask.assignees[0]?.userId;
+      if (nextAssigneeId) {
+        const { createNotification } = await import('../notifications/notification.service.js');
+        await createNotification({
+          userId: nextAssigneeId,
+          title: 'Prerequisite Task Completed',
+          message: `Prerequisite task "${updatedTask.title}" is now DONE. Your task "${nextTask.title}" is ready / actionable.`,
+          type: 'TASK_ACTIONABLE',
+          link: `/tasks/${nextTask.id}`,
+        });
+      }
+    }
+
+    // Check if part of a pipeline using dependency traversal (Design -> Development -> QA)
+    // Find root (Design) or traverse up/down dependencies in the same project
+    const allProjectTasks = await prisma.task.findMany({
+      where: { projectId: updatedTask.projectId },
+      include: {
+        dependencies: { select: { dependsOnTaskId: true } },
+      },
+    });
+
+    const taskMap = new Map(allProjectTasks.map((t) => [t.id, t]));
+
+    // Find if updatedTask is part of a 3-tier chain (Design -> Dev -> QA)
+    // Let's trace back to find the root task (in-degree 0 among pipeline) or forward
+    let rootTask: typeof allProjectTasks[0] | null = null;
+    let current: typeof allProjectTasks[0] | undefined = updatedTask;
+    const visited = new Set<string>();
+
+    while (current && current.dependencies.length > 0 && !visited.has(current.id)) {
+      visited.add(current.id);
+      const parentId = current.dependencies[0]?.dependsOnTaskId;
+      if (parentId && taskMap.has(parentId)) {
+        current = taskMap.get(parentId);
+      } else {
+        break;
+      }
+    }
+    rootTask = current || null;
+
+    if (rootTask) {
+      // Gather chain: root -> child -> grandchild
+      const chain: string[] = [rootTask.id];
+      let cursor = rootTask.id;
+      while (true) {
+        const child = allProjectTasks.find((t) => t.dependencies.some((d) => d.dependsOnTaskId === cursor));
+        if (child && !chain.includes(child.id)) {
+          chain.push(child.id);
+          cursor = child.id;
+        } else {
+          break;
+        }
+      }
+
+      if (chain.length === 3) {
+        const pipelineTasks = chain.map((id) => taskMap.get(id)!).filter(Boolean);
+        const pipelineTitle = rootTask.title.replace(/^\[(Design|Development|QA)\]\s+/, '');
+
+        if (pipelineTasks.length === 3 && pipelineTasks.every((pt) => pt.status === 'DONE')) {
+          // Check if TASK_PIPELINE_COMPLETED was already logged for this pipeline title in this project
+          const existingLog = await prisma.activityLog.findFirst({
+            where: {
+              projectId: updatedTask.projectId,
+              action: 'TASK_PIPELINE_COMPLETED',
+              metadata: {
+                path: ['pipelineTitle'],
+                equals: pipelineTitle,
+              },
+            },
+          });
+
+          if (!existingLog) {
+            await createActivityLog({
+              projectId: updatedTask.projectId,
+              actorId: userId,
+              action: 'TASK_PIPELINE_COMPLETED',
+              metadata: {
+                pipelineTitle,
+              },
+            });
+          }
+        }
+      }
+    }
+  }
 
   await createActivityLog({
     projectId: updatedTask.projectId,
@@ -511,6 +809,7 @@ export async function getTasks(
     status,
     priority,
     assigneeId,
+    myWork,
     page,
     limit,
     sortBy,
@@ -549,6 +848,18 @@ export async function getTasks(
               },
             ],
           };
+
+  if (myWork) {
+    where.AND = [
+      ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+      {
+        OR: [
+          { assigneeId: userId },
+          { assignees: { some: { userId } } },
+        ],
+      },
+    ];
+  }
 
   if (search) {
     where.title = {

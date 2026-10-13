@@ -10,6 +10,9 @@ const registerSchema = z.object({
   name: z.string().trim().min(2, 'Name must be at least 2 characters'),
   email: z.string().trim().email('Please enter a valid email'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
+  role: z.enum(['PROJECT_MANAGER', 'DEVELOPER', 'DESIGNER', 'QA'], {
+    message: 'Please select a valid position',
+  }),
 });
 
 type RegisterFormData = z.infer<typeof registerSchema>;
@@ -28,6 +31,7 @@ export default function RegisterPage() {
       name: '',
       email: '',
       password: '',
+      role: undefined,
     },
   });
 
@@ -126,6 +130,23 @@ export default function RegisterPage() {
                   {...registerField('password')}
                 />
                 {errors.password && <p className="form-error">{errors.password.message}</p>}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="role">Position</label>
+                <select
+                  id="role"
+                  {...registerField('role')}
+                  defaultValue=""
+                  style={{ width: '100%', padding: '12px 14px', border: '1px solid #d1d5db', borderRadius: '8px', outline: 'none', background: '#fff' }}
+                >
+                  <option value="" disabled>Select Position</option>
+                  <option value="PROJECT_MANAGER">Project Manager</option>
+                  <option value="DEVELOPER">Developer</option>
+                  <option value="DESIGNER">Designer</option>
+                  <option value="QA">QA</option>
+                </select>
+                {errors.role && <p className="form-error">{errors.role.message}</p>}
               </div>
 
               {serverError && <p className="form-error">{serverError}</p>}

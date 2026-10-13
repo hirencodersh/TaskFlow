@@ -79,6 +79,13 @@ export default function TasksPage() {
   const [priority, setPriority] =
     useState<TaskPriority | ''>('');
 
+  const [myWork, setMyWork] =
+    useState(
+      currentUser?.role === 'DESIGNER' ||
+      currentUser?.role === 'DEVELOPER' ||
+      currentUser?.role === 'QA'
+    );
+
   const [sortBy] =
     useState<
       | 'createdAt'
@@ -116,6 +123,10 @@ export default function TasksPage() {
     priority: 'MEDIUM' as TaskPriority,
     assigneeIds: [] as string[],
     dueDate: '',
+    isPipeline: false,
+    designAssigneeId: '',
+    devAssigneeId: '',
+    qaAssigneeId: '',
   });
 
   useEffect(() => {
@@ -130,6 +141,7 @@ export default function TasksPage() {
             status: status || undefined,
             priority:
               priority || undefined,
+            myWork: myWork || undefined,
             page,
             limit: viewMode === 'kanban' ? 50 : 20,
             sortBy,
@@ -153,7 +165,7 @@ export default function TasksPage() {
     }
 
     loadTasks();
-  }, [search, status, priority, page, sortBy, sortOrder, viewMode]);
+  }, [search, status, priority, myWork, page, sortBy, sortOrder, viewMode]);
 
   useEffect(() => {
     async function loadProjects() {
@@ -181,6 +193,9 @@ export default function TasksPage() {
       ...current,
       projectId,
       assigneeIds: [],
+      designAssigneeId: '',
+      devAssigneeId: '',
+      qaAssigneeId: '',
     }));
 
     setProjectMembers([]);
@@ -223,6 +238,10 @@ export default function TasksPage() {
       priority: 'MEDIUM',
       assigneeIds: [],
       dueDate: '',
+      isPipeline: false,
+      designAssigneeId: '',
+      devAssigneeId: '',
+      qaAssigneeId: '',
     });
   }
 
@@ -242,6 +261,13 @@ export default function TasksPage() {
       return;
     }
 
+    if (form.isPipeline) {
+      if (!form.designAssigneeId || !form.devAssigneeId || !form.qaAssigneeId) {
+        setFormError('Pipeline creation requires assigning a Designer, Developer, and QA.');
+        return;
+      }
+    }
+
     try {
       setFormLoading(true);
       setFormError('');
@@ -254,9 +280,13 @@ export default function TasksPage() {
           undefined,
         status: form.status,
         priority: form.priority,
-        assigneeIds: form.assigneeIds.length > 0 ? form.assigneeIds : undefined,
+        assigneeIds: !form.isPipeline && form.assigneeIds.length > 0 ? form.assigneeIds : undefined,
         dueDate:
           form.dueDate || undefined,
+        isPipeline: form.isPipeline || undefined,
+        designAssigneeId: form.isPipeline ? form.designAssigneeId : undefined,
+        devAssigneeId: form.isPipeline ? form.devAssigneeId : undefined,
+        qaAssigneeId: form.isPipeline ? form.qaAssigneeId : undefined,
       });
 
       handleCloseCreateForm();
@@ -484,6 +514,23 @@ export default function TasksPage() {
               />
             </div>
 
+            <div className="task-form-group" style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600 }}>
+                <input
+                  type="checkbox"
+                  checked={form.isPipeline}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setForm((current) => ({ ...current, isPipeline: checked }));
+                  }}
+                />
+                Create Linked Design → Development → QA Pipeline
+              </label>
+              <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', marginBottom: 0 }}>
+                Automatically generates 3 sequential subtasks with pre-linked dependencies and role assignments.
+              </p>
+            </div>
+
             <div className="task-form-group">
               <label htmlFor="task-description">
                 Description
@@ -491,7 +538,7 @@ export default function TasksPage() {
 
               <textarea
                 id="task-description"
-                rows={5}
+                rows={4}
                 placeholder="Enter task description"
                 value={
                   form.description
@@ -506,110 +553,173 @@ export default function TasksPage() {
               />
             </div>
 
-            <div className="task-form-row">
-              <div className="task-form-group">
-                <label htmlFor="task-status">
-                  Status
-                </label>
-
-                <select
-                  id="task-status"
-                  value={form.status}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      status: event
-                        .target
-                        .value as TaskStatus,
-                    }))
-                  }
-                >
-                  <option value="TODO">
-                    To Do
-                  </option>
-                  <option
-                    value="IN_PROGRESS"
+            {form.isPipeline ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: '#f1f5f9', padding: '12px', borderRadius: '8px' }}>
+                <h4 style={{ margin: 0, fontSize: '14px', color: '#0f172a' }}>Pipeline Role Assignments</h4>
+                <div className="task-form-group">
+                  <label htmlFor="design-assignee">Designer Assignee</label>
+                  <select
+                    id="design-assignee"
+                    value={form.designAssigneeId}
+                    onChange={(e) => setForm((curr) => ({ ...curr, designAssigneeId: e.target.value }))}
                   >
-                    In Progress
-                  </option>
-                  <option value="IN_REVIEW">
-                    In Review
-                  </option>
-                  <option value="DONE">
-                    Done
-                  </option>
-                </select>
-              </div>
+                    <option value="">Select Designer</option>
+                    {projectMembers
+                      .filter((m) => m.user.role === 'DESIGNER')
+                      .map((m) => (
+                        <option key={m.userId} value={m.userId}>
+                          {m.user.name} ({m.user.role})
+                        </option>
+                      ))}
+                  </select>
+                </div>
 
-              <div className="task-form-group">
-                <label htmlFor="task-priority">
-                  Priority
-                </label>
-
-                <select
-                  id="task-priority"
-                  value={
-                    form.priority
-                  }
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      priority: event
-                        .target
-                        .value as TaskPriority,
-                    }))
-                  }
-                >
-                  <option value="LOW">
-                    Low
-                  </option>
-                  <option value="MEDIUM">
-                    Medium
-                  </option>
-                  <option value="HIGH">
-                    High
-                  </option>
-                  <option
-                    value="CRITICAL"
+                <div className="task-form-group">
+                  <label htmlFor="dev-assignee">Developer Assignee</label>
+                  <select
+                    id="dev-assignee"
+                    value={form.devAssigneeId}
+                    onChange={(e) => setForm((curr) => ({ ...curr, devAssigneeId: e.target.value }))}
                   >
-                    Critical
-                  </option>
-                </select>
+                    <option value="">Select Developer</option>
+                    {projectMembers
+                      .filter((m) => m.user.role === 'DEVELOPER')
+                      .map((m) => (
+                        <option key={m.userId} value={m.userId}>
+                          {m.user.name} ({m.user.role})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div className="task-form-group">
+                  <label htmlFor="qa-assignee">QA Assignee</label>
+                  <select
+                    id="qa-assignee"
+                    value={form.qaAssigneeId}
+                    onChange={(e) => setForm((curr) => ({ ...curr, qaAssigneeId: e.target.value }))}
+                  >
+                    <option value="">Select QA</option>
+                    {projectMembers
+                      .filter((m) => m.user.role === 'QA')
+                      .map((m) => (
+                        <option key={m.userId} value={m.userId}>
+                          {m.user.name} ({m.user.role})
+                        </option>
+                      ))}
+                  </select>
+                </div>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="task-form-row">
+                  <div className="task-form-group">
+                    <label htmlFor="task-status">
+                      Status
+                    </label>
+
+                    <select
+                      id="task-status"
+                      value={form.status}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          status: event
+                            .target
+                            .value as TaskStatus,
+                        }))
+                      }
+                    >
+                      <option value="TODO">
+                        To Do
+                      </option>
+                      <option
+                        value="IN_PROGRESS"
+                      >
+                        In Progress
+                      </option>
+                      <option value="IN_REVIEW">
+                        In Review
+                      </option>
+                      <option value="DONE">
+                        Done
+                      </option>
+                    </select>
+                  </div>
+
+                  <div className="task-form-group">
+                    <label htmlFor="task-priority">
+                      Priority
+                    </label>
+
+                    <select
+                      id="task-priority"
+                      value={
+                        form.priority
+                      }
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          priority: event
+                            .target
+                            .value as TaskPriority,
+                        }))
+                      }
+                    >
+                      <option value="LOW">
+                        Low
+                      </option>
+                      <option value="MEDIUM">
+                        Medium
+                      </option>
+                      <option value="HIGH">
+                        High
+                      </option>
+                      <option
+                        value="CRITICAL"
+                      >
+                        Critical
+                      </option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="task-form-row">
+                  <div className="task-form-group" style={{ gridColumn: '1 / -1' }}>
+                    <label>
+                      Assignees (Select multiple)
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '8px', maxHeight: '140px', overflowY: 'auto', padding: '10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                      {projectMembers.length === 0 ? (
+                        <span style={{ fontSize: '13px', color: '#64748b' }}>Select a project first</span>
+                      ) : (
+                        projectMembers.map((member) => (
+                          <label key={member.userId} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={form.assigneeIds.includes(member.userId)}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setForm((current) => ({
+                                  ...current,
+                                  assigneeIds: checked
+                                    ? [...current.assigneeIds, member.userId]
+                                    : current.assigneeIds.filter((id) => id !== member.userId),
+                                }));
+                              }}
+                            />
+                            {member.user.name} ({member.user.role})
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="task-form-row">
               <div className="task-form-group" style={{ gridColumn: '1 / -1' }}>
-                <label>
-                  Assignees (Select multiple)
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '8px', maxHeight: '140px', overflowY: 'auto', padding: '10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-                  {projectMembers.length === 0 ? (
-                    <span style={{ fontSize: '13px', color: '#64748b' }}>Select a project first</span>
-                  ) : (
-                    projectMembers.map((member) => (
-                      <label key={member.userId} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={form.assigneeIds.includes(member.userId)}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            setForm((current) => ({
-                              ...current,
-                              assigneeIds: checked
-                                ? [...current.assigneeIds, member.userId]
-                                : current.assigneeIds.filter((id) => id !== member.userId),
-                            }));
-                          }}
-                        />
-                        {member.user.name} ({member.user.role})
-                      </label>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div className="task-form-group">
                 <label htmlFor="task-due-date">
                   Due Date
                 </label>
@@ -669,7 +779,30 @@ export default function TasksPage() {
           />
         </div>
 
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <button
+            type="button"
+            className={`tasks-view-btn ${myWork ? 'active' : ''}`}
+            style={{
+              background: myWork ? '#0f172a' : '#fff',
+              color: myWork ? '#fff' : '#0f172a',
+              borderColor: '#cbd5e1',
+              padding: '6px 12px',
+              borderRadius: '6px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+            onClick={() => {
+              setMyWork((prev) => !prev);
+              setPage(1);
+            }}
+          >
+            <UserRound size={15} /> My Work
+          </button>
+
           <select
             value={status}
             onChange={(e) => {

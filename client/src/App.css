@@ -169,6 +169,12 @@ button {
   background: var(--tf-sidebar);
   color: #ffffff;
   border-right: 1px solid #1e293b;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-footer {
+  margin-top: auto;
 }
 
 .sidebar-header {
@@ -1208,6 +1214,12 @@ button {
   color: #4338ca;
 }
 
+.project-status-on_hold {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.project-status-cancelled,
 .project-status-archived {
   background: #fef2f2;
   color: #b91c1c;

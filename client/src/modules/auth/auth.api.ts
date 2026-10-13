@@ -17,6 +17,7 @@ type RegisterInput = {
   name: string;
   email: string;
   password: string;
+  role: 'PROJECT_MANAGER' | 'DEVELOPER' | 'DESIGNER' | 'QA';
 };
 
 type LoginInput = {

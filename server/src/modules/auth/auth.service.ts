@@ -27,7 +27,7 @@ export async function registerUser(input: RegisterInput) {
       name: input.name,
       email: input.email.toLowerCase(),
       passwordHash,
-      role: 'DEVELOPER',
+      role: input.role,
       isActive: false,
     },
     select: {

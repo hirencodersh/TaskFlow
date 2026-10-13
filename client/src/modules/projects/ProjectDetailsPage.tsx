@@ -1235,8 +1235,9 @@ export default function ProjectDetailsPage() {
                                     >
                                         <option value="PLANNING">Planning</option>
                                         <option value="ACTIVE">Active</option>
+                                        <option value="ON_HOLD">On Hold</option>
                                         <option value="COMPLETED">Completed</option>
-                                        <option value="ARCHIVED">Archived</option>
+                                        <option value="CANCELLED">Cancelled</option>
                                     </select>
                                 </div>
                             </div>

@@ -28,6 +28,11 @@ export const createTaskSchema = z.object({
   dependencyIds: z.array(z.string()).optional(),
 
   dueDate: z.coerce.date().optional(),
+
+  isPipeline: z.boolean().optional(),
+  designAssigneeId: z.string().optional(),
+  devAssigneeId: z.string().optional(),
+  qaAssigneeId: z.string().optional(),
 });
 
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
@@ -64,6 +69,10 @@ export const updateTaskSchema = z
     dependencyIds: z.array(z.string()).optional(),
 
     dueDate: z.coerce.date().optional(),
+
+    returnToDeveloper: z.boolean().optional(),
+    returnReason: z.string().trim().min(1, 'Return reason is required').optional(),
+    targetDevTaskId: z.string().optional(),
   })
   .refine(
     (data) => Object.keys(data).length > 0,
@@ -84,6 +93,8 @@ export const listTaskQuerySchema = z.object({
     .optional(),
 
   assigneeId: z.string().min(1).optional(),
+
+  myWork: z.coerce.boolean().optional(),
 
   page: z.coerce.number().int().positive().default(1),
 

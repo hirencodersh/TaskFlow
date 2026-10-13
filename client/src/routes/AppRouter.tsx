@@ -14,6 +14,7 @@ import DashboardPage from '../modules/dashboard/DashboardPage';
 import ProjectsPage from '../modules/projects/ProjectsPage';
 import TasksPage from '../modules/tasks/TasksPage';
 import AdminUsersPage from '../modules/admin/AdminUsersPage';
+import TeamPage from '../modules/team/TeamPage';
 import ProjectDetailsPage from '../modules/projects/ProjectDetailsPage';
 import TaskDetailsPage from '../modules/tasks/TaskDetailsPage';
 
@@ -175,6 +176,22 @@ export default function AppRouter() {
           user?.role === 'ADMIN' ? (
             <AppLayout>
               <AdminUsersPage />
+            </AppLayout>
+          ) : (
+            <Navigate
+              to="/"
+              replace
+            />
+          )
+        }
+      />
+
+      <Route
+        path="/team"
+        element={
+          user?.role === 'ADMIN' || user?.role === 'PROJECT_MANAGER' ? (
+            <AppLayout>
+              <TeamPage />
             </AppLayout>
           ) : (
             <Navigate

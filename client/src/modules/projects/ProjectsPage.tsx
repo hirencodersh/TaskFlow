@@ -28,7 +28,7 @@ import { formatDate } from '../../lib/date';
 type ProjectFormData = {
   name: string;
   description: string;
-  status: ProjectStatus;
+  status: ProjectStatus | '';
   startDate: string;
   dueDate: string;
 };
@@ -60,7 +60,7 @@ export default function ProjectsPage() {
     useState<ProjectFormData>({
       name: '',
       description: '',
-      status: 'PLANNING',
+      status: '',
       startDate: '',
       dueDate: '',
     });
@@ -108,6 +108,13 @@ export default function ProjectsPage() {
       return;
     }
 
+    if (!formData.status) {
+      setFormError(
+        'Project status is required.',
+      );
+      return;
+    }
+
     try {
       setIsCreating(true);
 
@@ -130,7 +137,7 @@ export default function ProjectsPage() {
       setFormData({
         name: '',
         description: '',
-        status: 'PLANNING',
+        status: '',
         startDate: '',
         dueDate: '',
       });
@@ -268,12 +275,28 @@ export default function ProjectsPage() {
                   }
                   disabled={isCreating}
                 >
+                  <option value="" disabled>
+                    Select Status
+                  </option>
+
                   <option value="PLANNING">
                     Planning
                   </option>
 
                   <option value="ACTIVE">
                     Active
+                  </option>
+
+                  <option value="ON_HOLD">
+                    On Hold
+                  </option>
+
+                  <option value="COMPLETED">
+                    Completed
+                  </option>
+
+                  <option value="CANCELLED">
+                    Cancelled
                   </option>
                 </select>
               </div>

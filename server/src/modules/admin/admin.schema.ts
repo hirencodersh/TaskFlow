@@ -38,7 +38,6 @@ export type ListUsersQuery = z.infer<
 
 export const updateUserRoleSchema = z.object({
   role: z.enum([
-    'ADMIN',
     'PROJECT_MANAGER',
     'DEVELOPER',
     'DESIGNER',
@@ -76,7 +75,6 @@ export const createUserSchema = z.object({
     .string()
     .min(8, 'Password must be at least 8 characters'),
   role: z.enum([
-    'ADMIN',
     'PROJECT_MANAGER',
     'DEVELOPER',
     'DESIGNER',

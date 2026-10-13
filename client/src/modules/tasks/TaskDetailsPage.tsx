@@ -166,7 +166,7 @@ export default function TaskDetailsPage({
         description: '',
         status: 'TODO' as TaskStatus,
         priority: 'MEDIUM' as TaskPriority,
-        assigneeId: '',
+        assigneeIds: [] as string[],
         dueDate: '',
     });
 
@@ -199,7 +199,7 @@ export default function TaskDetailsPage({
                         loadedTask.description || '',
                     status: loadedTask.status,
                     priority: loadedTask.priority,
-                    assigneeId: loadedTask.assigneeId || '',
+                    assigneeIds: loadedTask.assignees?.map((a) => a.userId) || (loadedTask.assigneeId ? [loadedTask.assigneeId] : []),
                     dueDate: loadedTask.dueDate
                         ? loadedTask.dueDate.slice(
                             0,
@@ -304,7 +304,7 @@ export default function TaskDetailsPage({
                 task.description || '',
             status: task.status,
             priority: task.priority,
-            assigneeId: task.assigneeId || '',
+            assigneeIds: task.assignees?.map((a) => a.userId) || (task.assigneeId ? [task.assigneeId] : []),
             dueDate: task.dueDate
                 ? task.dueDate.slice(0, 10)
                 : '',
@@ -373,8 +373,7 @@ export default function TaskDetailsPage({
                         form.description.trim(),
                     status: form.status,
                     priority: form.priority,
-                    assigneeIds:
-                        form.assigneeId ? [form.assigneeId] : undefined,
+                    assigneeIds: form.assigneeIds,
                     dueDate:
                         form.dueDate || undefined,
                 });
@@ -394,7 +393,7 @@ export default function TaskDetailsPage({
                     updatedTask.description || '',
                 status: updatedTask.status,
                 priority: updatedTask.priority,
-                assigneeId: updatedTask.assigneeId || '',
+                assigneeIds: updatedTask.assignees?.map((a) => a.userId) || (updatedTask.assigneeId ? [updatedTask.assigneeId] : []),
                 dueDate:
                     updatedTask.dueDate
                         ? updatedTask.dueDate.slice(
@@ -441,6 +440,67 @@ export default function TaskDetailsPage({
             );
         } finally {
             setDeleting(false);
+        }
+    }
+
+    const [returnReason, setReturnReason] = useState('');
+    const [returning, setReturning] = useState(false);
+    const [returnError, setReturnError] = useState('');
+
+    async function handleQaPass() {
+        try {
+            setSaving(true);
+            await updateTask(taskId, { status: 'DONE' });
+            const response = await getTaskById(taskId);
+            setTask(response.data.task);
+        } catch (error: unknown) {
+            const message =
+                (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+                'Failed to pass QA task.';
+            alert(message);
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function handleReturnToDeveloper(e: React.FormEvent) {
+        e.preventDefault();
+        if (!returnReason.trim()) {
+            setReturnError('Return reason is required.');
+            return;
+        }
+
+        // Find the development task dependency (dependsOn task)
+        const devDependency = task?.dependencies?.find((d) =>
+            d.dependsOn.title.toLowerCase().includes('development') || d.dependsOn.title.toLowerCase().includes('[development]')
+        ) || task?.dependencies?.[0];
+
+        if (!devDependency) {
+            setReturnError('Could not locate linked Development task dependency to return to.');
+            return;
+        }
+
+        try {
+            setReturning(true);
+            setReturnError('');
+
+            await updateTask(taskId, {
+                returnToDeveloper: true,
+                returnReason: returnReason.trim(),
+                targetDevTaskId: devDependency.dependsOn.id,
+            });
+
+            setReturnReason('');
+            const response = await getTaskById(taskId);
+            setTask(response.data.task);
+            alert('Task successfully returned to developer.');
+        } catch (error: unknown) {
+            const message =
+                (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+                'Failed to return task to developer.';
+            setReturnError(message);
+        } finally {
+            setReturning(false);
         }
     }
 
@@ -716,6 +776,40 @@ export default function TaskDetailsPage({
     const canEdit =
         canEditFullTask || developerCanEdit;
 
+    // Determine pipeline phase and stage statuses from dependencies/blockers/title
+    const titleLower = task.title.toLowerCase();
+    const isDesignPhase = titleLower.includes('design') || titleLower.startsWith('[design]');
+    const isDevPhase = titleLower.includes('development') || titleLower.startsWith('[development]');
+    const isQaPhase = titleLower.includes('qa') || titleLower.startsWith('[qa]');
+
+    let designStatus = 'NOT_APPLICABLE';
+    let devStatus = 'NOT_APPLICABLE';
+    let qaStatus = 'NOT_APPLICABLE';
+
+    const blockers = (task as unknown as { blockers?: Array<{ task: { title: string; status: TaskStatus; dependencies?: Array<{ dependsOn: { title: string; status: TaskStatus } }> } }> }).blockers;
+
+    if (isDesignPhase) {
+        designStatus = task.status;
+        const devTask = blockers?.find((b: { task: { title: string } }) => b.task.title.toLowerCase().includes('development') || b.task.title.toLowerCase().includes('[development]'))?.task;
+        devStatus = devTask ? devTask.status : (task.status === 'DONE' ? 'TODO' : 'WAITING');
+        const qaTask = (devTask as unknown as { blockers?: Array<{ task: { title: string; status: TaskStatus } }> })?.blockers?.find((b: { task: { title: string } }) => b.task.title.toLowerCase().includes('qa') || b.task.title.toLowerCase().includes('[qa]'))?.task;
+        qaStatus = qaTask ? qaTask.status : 'WAITING';
+    } else if (isDevPhase) {
+        const designTask = task.dependencies?.find((d: { dependsOn: { title: string } }) => d.dependsOn.title.toLowerCase().includes('design') || d.dependsOn.title.toLowerCase().includes('[design]'))?.dependsOn;
+        designStatus = designTask ? designTask.status : 'DONE';
+        devStatus = task.status;
+        const qaTask = blockers?.find((b: { task: { title: string } }) => b.task.title.toLowerCase().includes('qa') || b.task.title.toLowerCase().includes('[qa]'))?.task;
+        qaStatus = qaTask ? qaTask.status : (task.status === 'DONE' ? 'TODO' : 'WAITING');
+    } else if (isQaPhase) {
+        const devTask = task.dependencies?.find((d: { dependsOn: { title: string } }) => d.dependsOn.title.toLowerCase().includes('development') || d.dependsOn.title.toLowerCase().includes('[development]'))?.dependsOn;
+        devStatus = devTask ? devTask.status : 'DONE';
+        const designTask = (devTask as unknown as { dependencies?: Array<{ dependsOn: { title: string; status: TaskStatus } }> })?.dependencies?.find((d: { dependsOn: { title: string } }) => d.dependsOn.title.toLowerCase().includes('design') || d.dependsOn.title.toLowerCase().includes('[design]'))?.dependsOn;
+        designStatus = designTask ? designTask.status : 'DONE';
+        qaStatus = task.status;
+    }
+
+    const currentPhaseLabel = isDesignPhase ? 'Design Phase' : isDevPhase ? 'Development Phase' : isQaPhase ? 'QA Phase' : 'Task';
+
     return (
         <section className="task-details-page">
             <div className="task-details-header">
@@ -726,6 +820,12 @@ export default function TaskDetailsPage({
                     >
                         <ArrowLeft size={16} /> Back to Tasks
                     </Link>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', background: '#e2e8f0', color: '#334155', padding: '2px 8px', borderRadius: '4px' }}>
+                            {currentPhaseLabel}
+                        </span>
+                    </div>
 
                     <h1>{task.title}</h1>
 
@@ -752,6 +852,36 @@ export default function TaskDetailsPage({
                 </div>
             </div>
 
+            {(isDesignPhase || isDevPhase || isQaPhase) && (
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
+                    <h3 style={{ fontSize: '13px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '12px' }}>
+                        Pipeline Progress Tracker
+                    </h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: isDesignPhase ? '#e0f2fe' : '#fff', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                            <span style={{ fontWeight: 600, fontSize: '13px' }}>1. Design</span>
+                            <span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', background: designStatus === 'DONE' ? '#dcfce7' : designStatus === 'IN_PROGRESS' || designStatus === 'IN_REVIEW' ? '#fef9c3' : '#f1f5f9', color: designStatus === 'DONE' ? '#166534' : designStatus === 'IN_PROGRESS' || designStatus === 'IN_REVIEW' ? '#854d0e' : '#64748b' }}>
+                                {designStatus.replace('_', ' ')}
+                            </span>
+                        </div>
+                        <span style={{ color: '#cbd5e1' }}>→</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: isDevPhase ? '#e0f2fe' : '#fff', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                            <span style={{ fontWeight: 600, fontSize: '13px' }}>2. Development</span>
+                            <span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', background: devStatus === 'DONE' ? '#dcfce7' : devStatus === 'IN_PROGRESS' || devStatus === 'IN_REVIEW' ? '#fef9c3' : '#f1f5f9', color: devStatus === 'DONE' ? '#166534' : devStatus === 'IN_PROGRESS' || devStatus === 'IN_REVIEW' ? '#854d0e' : '#64748b' }}>
+                                {devStatus.replace('_', ' ')}
+                            </span>
+                        </div>
+                        <span style={{ color: '#cbd5e1' }}>→</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: isQaPhase ? '#e0f2fe' : '#fff', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                            <span style={{ fontWeight: 600, fontSize: '13px' }}>3. QA</span>
+                            <span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', background: qaStatus === 'DONE' ? '#dcfce7' : qaStatus === 'IN_PROGRESS' || qaStatus === 'IN_REVIEW' ? '#fef9c3' : '#f1f5f9', color: qaStatus === 'DONE' ? '#166534' : qaStatus === 'IN_PROGRESS' || qaStatus === 'IN_REVIEW' ? '#854d0e' : '#64748b' }}>
+                                {qaStatus.replace('_', ' ')}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {formError ? (
                 <p className="form-error" style={{ marginBottom: '16px' }}>
                     {formError}
@@ -768,6 +898,20 @@ export default function TaskDetailsPage({
                         <Edit3 size={15} /> Edit Task
                     </button>
 
+                    {(currentUserRole === 'QA' || currentUserRole === 'ADMIN') && (
+                        <>
+                            <button
+                                type="button"
+                                className="create-project-submit"
+                                style={{ background: '#16a34a' }}
+                                onClick={handleQaPass}
+                                disabled={saving}
+                            >
+                                ✓ QA Pass (Mark Done)
+                            </button>
+                        </>
+                    )}
+
                     {canEditFullTask ? (
                         <button
                             type="button"
@@ -780,6 +924,45 @@ export default function TaskDetailsPage({
                     ) : null}
                 </div>
             ) : null}
+
+            {(currentUserRole === 'QA' || currentUserRole === 'ADMIN') && (
+                <div className="task-form-card" style={{ marginTop: '16px', borderLeft: '4px solid #ca8a04' }}>
+                    <div className="task-form-header">
+                        <h2>QA Action: Return to Developer</h2>
+                        <p>If bugs or failures are found during testing, return this task to the developer with a reason.</p>
+                    </div>
+
+                    {returnError ? (
+                        <p className="form-error" style={{ marginBottom: '12px' }}>
+                            {returnError}
+                        </p>
+                    ) : null}
+
+                    <form className="task-form" onSubmit={handleReturnToDeveloper}>
+                        <div className="task-form-group">
+                            <label htmlFor="return-reason">Return Reason / Bug Description</label>
+                            <textarea
+                                id="return-reason"
+                                rows={3}
+                                placeholder="Describe why this task is being returned..."
+                                value={returnReason}
+                                onChange={(e) => setReturnReason(e.target.value)}
+                                disabled={returning}
+                            />
+                        </div>
+
+                        <div className="task-form-actions">
+                            <button
+                                type="submit"
+                                className="task-delete-button"
+                                disabled={returning || !returnReason.trim()}
+                            >
+                                {returning ? 'Returning...' : 'Return to Developer'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
 
             {editing ? (
                 <div className="task-form-card">
@@ -938,38 +1121,30 @@ export default function TaskDetailsPage({
                         {canEditFullTask ? (
                             <div className="task-form-group">
                                 <label>
-                                    Assignee
+                                    Assignees (Select multiple)
                                 </label>
-
-                                <select
-                                    value={form.assigneeId}
-                                    onChange={(event) =>
-                                        setForm((current) => ({
-                                            ...current,
-                                            assigneeId:
-                                                event.target.value,
-                                        }))
-                                    }
-                                    disabled={saving}
-                                >
-                                    <option value="">
-                                        Unassigned
-                                    </option>
-
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '150px', overflowY: 'auto', border: '1px solid #e2e8f0', padding: '10px', borderRadius: '8px', background: '#f8fafc' }}>
                                     {projectMembers
-                                        .filter(
-                                            (member) =>
-                                                member.user.role === 'DEVELOPER',
-                                        )
                                         .map((member) => (
-                                            <option
-                                                key={member.userId}
-                                                value={member.userId}
-                                            >
-                                                {member.user.name}
-                                            </option>
+                                            <label key={member.userId} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer', color: '#334155' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={form.assigneeIds.includes(member.userId)}
+                                                    onChange={(e) => {
+                                                        const checked = e.target.checked;
+                                                        setForm((curr) => ({
+                                                            ...curr,
+                                                            assigneeIds: checked
+                                                                ? [...curr.assigneeIds, member.userId]
+                                                                : curr.assigneeIds.filter((id) => id !== member.userId),
+                                                        }));
+                                                    }}
+                                                    disabled={saving}
+                                                />
+                                                {member.user.name} ({member.user.role.replace('_', ' ')})
+                                            </label>
                                         ))}
-                                </select>
+                                </div>
                             </div>
                         ) : null}
 

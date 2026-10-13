@@ -79,6 +79,7 @@ export type GetTasksParams = {
   status?: TaskStatus;
   priority?: TaskPriority;
   assigneeId?: string;
+  myWork?: boolean;
   page?: number;
   limit?: number;
   sortBy?:
@@ -120,13 +121,20 @@ export type CreateTaskInput = {
   assigneeIds?: string[];
   dependencyIds?: string[];
   dueDate?: string;
+  isPipeline?: boolean;
+  designAssigneeId?: string;
+  devAssigneeId?: string;
+  qaAssigneeId?: string;
 };
 
 type CreateTaskResponse = {
   success: boolean;
   message?: string;
   data: {
-    task: Task;
+    task?: Task;
+    designTask?: Task;
+    devTask?: Task;
+    qaTask?: Task;
   };
 };
 
@@ -164,6 +172,9 @@ export type UpdateTaskInput = {
   assigneeIds?: string[];
   dependencyIds?: string[];
   dueDate?: string;
+  returnToDeveloper?: boolean;
+  returnReason?: string;
+  targetDevTaskId?: string;
 };
 
 type UpdateTaskResponse = {

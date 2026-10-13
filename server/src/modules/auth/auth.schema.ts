@@ -17,6 +17,10 @@ export const registerSchema = z.object({
     .email('Invalid email address'),
 
   password: passwordSchema,
+
+  role: z.enum(['PROJECT_MANAGER', 'DEVELOPER', 'DESIGNER', 'QA'], {
+    message: 'Please select a valid position',
+  }),
 });
 
 export type RegisterInput =
